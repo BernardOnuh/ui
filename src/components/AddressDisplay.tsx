@@ -80,7 +80,7 @@ export function AddressDisplay({
             "shrink-0 p-1 rounded-md transition-all",
             copied
               ? "text-green bg-success-dim"
-              : "text-ink-3 hover:text-ink-2 hover:bg-surface-2 opacity-50 hover:opacity-100",
+              : "text-ink-3 hover:text-ink-2 hover:bg-surface-2 opacity-40 hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-brand",
           )}
         >
           <HugeiconsIcon
