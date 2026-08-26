@@ -1,4 +1,4 @@
-import { Loading01Icon } from "@hugeicons/core-free-icons";
+import { Copy01Icon, Loading01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 
@@ -24,7 +24,18 @@ export function InfoCell({
   className,
   ...rest
 }: InfoCellProps) {
+  const [copied, setCopied] = useState(false);
   const [probe, setProbe] = useState<ProbeState>("idle");
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* fallback */
+    }
+  }
 
   async function testConnection() {
     setProbe("testing");
@@ -64,6 +75,26 @@ export function InfoCell({
         >
           {value}
         </span>
+        {rest.copyable && (
+          <button
+            onClick={copy}
+            aria-label={copied ? `${rest.label} copied` : `Copy ${rest.label}`}
+            className={cn(
+              "shrink-0 p-1 rounded-md transition-all mt-0.5",
+              copied
+                ? "text-green bg-success-dim"
+                : "text-ink-3 hover:text-ink-2 hover:bg-surface-2 opacity-50 hover:opacity-100",
+            )}
+            title={copied ? "Copied!" : `Copy ${rest.label}`}
+          >
+            <HugeiconsIcon
+              icon={copied ? Tick01Icon : Copy01Icon}
+              size={12}
+              color="currentColor"
+              strokeWidth={2}
+            />
+          </button>
+        )}
       </div>
       <div className="flex items-center gap-2 mt-0.5">
         <button
