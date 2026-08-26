@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/Badge";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { getClient } from "@/lib/client";
+import { useSorokit } from "@/context/useSorokit";
 import { cn, toXLM } from "@/lib/utils";
 
 export interface FeeData {
@@ -28,14 +28,16 @@ export function FeeEstimator({
   compact,
   onFeeLoad,
 }: FeeEstimatorProps) {
+  const { client } = useSorokit();
   const [fee, setFee] = useState<FeeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!client) return;
     setLoading(true);
     try {
-      const { data, error: err } = await getClient().transaction.estimateFee();
+      const { data, error: err } = await client.transaction.estimateFee();
       if (err) {
         setError(err);
         return;
@@ -48,7 +50,7 @@ export function FeeEstimator({
     } finally {
       setLoading(false);
     }
-  }, [onFeeLoad]);
+  }, [client, onFeeLoad]);
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {

@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useSorokit } from "@/context/useSorokit";
-import { type BatchEntry, type BatchEntryResult, type BatchProgress, getClient } from "@/lib/client";
+import { type BatchEntry, type BatchEntryResult, type BatchProgress } from "@/lib/client";
 import { cn, truncateAddress } from "@/lib/utils";
 
 const STATUS_BADGE: Record<BatchEntryResult["status"], { variant: "default" | "warning" | "primary" | "success" | "error"; label: string }> = {
@@ -107,7 +107,7 @@ interface BatchPaymentProcessorProps {
 }
 
 export function BatchPaymentProcessor({ className, defaultAsset = "XLM" }: BatchPaymentProcessorProps) {
-  const { isConnected, address } = useSorokit();
+  const { isConnected, address, client } = useSorokit();
   const [fileEntries, setFileEntries] = useState<BatchEntry[] | null>(null);
   const [fileErrors, setFileErrors] = useState<string[]>([]);
   const [fileName, setFileName] = useState<string>("");
@@ -121,8 +121,6 @@ export function BatchPaymentProcessor({ className, defaultAsset = "XLM" }: Batch
   const [reportFormat, setReportFormat] = useState<"csv" | "json">("csv");
   const [currentView, setCurrentView] = useState<"upload" | "results" | "progress">("upload");
   const pollRef = useRef<number | null>(null);
-
-
 
   const clearState = useCallback(() => {
     setFileEntries(null);
@@ -246,7 +244,7 @@ export function BatchPaymentProcessor({ className, defaultAsset = "XLM" }: Batch
     [batchId],
   );
 
-  const handleDownloadReport = useCallback(() => {
+  const handleExportReport = useCallback(() => {
     if (!results) return;
     const totalFee = feeEstimate ?? "0";
     if (reportFormat === "csv") {
@@ -257,13 +255,13 @@ export function BatchPaymentProcessor({ className, defaultAsset = "XLM" }: Batch
   }, [results, feeEstimate, reportFormat, downloadCSVReport, downloadJSONReport]);
 
   const handleStartBatch = useCallback(async () => {
-    if (!fileEntries || fileEntries.length === 0 || !address) return;
+    if (!fileEntries || fileEntries.length === 0 || !address || !client) return;
 
     setIsProcessing(true);
     setCurrentView("progress");
 
     try {
-      const { error, batchId: bid } = await getClient().batch.submitBatch({
+      const { error, batchId: bid } = await client.batch.submitBatch({
         entries: fileEntries,
         sourceAccount: address,
         asset: defaultAsset,
@@ -295,7 +293,7 @@ export function BatchPaymentProcessor({ className, defaultAsset = "XLM" }: Batch
         })),
       );
 
-      const { data: feeData, error: feeErr } = await getClient().transaction.estimateFee();
+      const { data: feeData, error: feeErr } = await client.transaction.estimateFee();
       if (!feeErr && feeData) {
         setFeeEstimate(feeData.recommended);
       }
@@ -304,7 +302,7 @@ export function BatchPaymentProcessor({ className, defaultAsset = "XLM" }: Batch
     } finally {
       setIsProcessing(false);
     }
-  }, [fileEntries, address, defaultAsset, maxRetries]);
+  }, [fileEntries, address, client, defaultAsset, maxRetries]);
 
   const handlePause = useCallback(() => {
     setIsPaused(true);
@@ -319,8 +317,8 @@ export function BatchPaymentProcessor({ className, defaultAsset = "XLM" }: Batch
   }, []);
 
   const handleCancel = useCallback(async () => {
-    if (!batchId) return;
-    await getClient().batch.cancelBatch(batchId);
+    if (!batchId || !client) return;
+    await client.batch.cancelBatch(batchId);
     if (pollRef.current) {
       window.clearInterval(pollRef.current);
       pollRef.current = null;
@@ -328,12 +326,12 @@ export function BatchPaymentProcessor({ className, defaultAsset = "XLM" }: Batch
     setIsProcessing(false);
     setIsPaused(false);
     setCurrentView("results");
-  }, [batchId]);
+  }, [batchId, client]);
 
   const handleRetry = useCallback(async (index: number) => {
-    if (!batchId || !results) return;
+    if (!batchId || !results || !client) return;
     try {
-      const { data, error } = await getClient().batch.retryEntry({ batchId, entryIndex: index });
+      const { data, error } = await client.batch.retryEntry({ batchId, entryIndex: index });
       if (error) return;
       if (data) {
         const updated = [...results];
@@ -343,12 +341,12 @@ export function BatchPaymentProcessor({ className, defaultAsset = "XLM" }: Batch
     } catch {
       /* ignore */
     }
-  }, [batchId, results]);
+  }, [batchId, results, client]);
 
   const pollProgress = useCallback(async () => {
-    if (!batchId || isPaused) return;
+    if (!batchId || isPaused || !client) return;
     try {
-      const { data, error } = await getClient().batch.getBatchStatus(batchId);
+      const { data, error } = await client.batch.getBatchStatus(batchId);
       if (error || !data) return;
       setProgress(data);
 
@@ -645,7 +643,7 @@ export function BatchPaymentProcessor({ className, defaultAsset = "XLM" }: Batch
             )}
 
             <div className="flex items-center gap-3">
-              <Button variant="primary" size="sm" onClick={handleDownloadReport}>
+              <Button variant="primary" size="sm" onClick={handleExportReport}>
                 <HugeiconsIcon icon={DownloadIcon} size={12} color="currentColor" strokeWidth={1.5} />
                 Download Report
               </Button>

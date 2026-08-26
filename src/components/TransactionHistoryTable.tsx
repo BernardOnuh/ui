@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useSorokit } from "@/context/useSorokit";
 import type { NetworkInfo, Transaction } from "@/lib/client";
-import { getClient } from "@/lib/client";
 import { cn, truncateAddress } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
@@ -338,7 +337,7 @@ export function TransactionHistoryTable({
   className,
   pageSize = PAGE_SIZE,
 }: TransactionHistoryTableProps) {
-  const { address, isConnected, network } = useSorokit();
+  const { address, isConnected, network, client } = useSorokit();
   const [allTxs, setAllTxs] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -356,11 +355,11 @@ export function TransactionHistoryTable({
 
   // Fetch all transactions
   useEffect(() => {
-    if (!address) return;
+    if (!address || !client) return;
     let active = true;
     const timerId = window.setTimeout(() => {
       setLoading(true);
-      getClient()
+      client
         .transaction.getHistory(address, 1, 1000)
         .then(({ data, error: err }) => {
           if (!active) return;
@@ -379,7 +378,7 @@ export function TransactionHistoryTable({
       active = false;
       window.clearTimeout(timerId);
     };
-  }, [address]);
+  }, [address, client]);
 
   useEffect(() => {
     queueMicrotask(() => {

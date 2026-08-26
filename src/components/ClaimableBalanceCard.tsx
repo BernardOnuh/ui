@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { useSorokit } from "@/context/useSorokit";
 import type { ClaimableBalance } from "@/lib/client";
-import { getClient } from "@/lib/client";
 import { cn, safeFormat, truncateAddress } from "@/lib/utils";
 
 function isPredicateExpired(predicate: unknown, _currentTime: number): boolean {
@@ -31,6 +30,7 @@ interface BalanceRowProps {
 }
 
 function BalanceRow({ cb, confirmThreshold, currentTime = Date.now() }: BalanceRowProps) {
+  const { client } = useSorokit();
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
@@ -52,11 +52,12 @@ function BalanceRow({ cb, confirmThreshold, currentTime = Date.now() }: BalanceR
   }
 
   async function doClaim() {
+    if (!client) return;
     setClaiming(true);
     setClaimError(null);
     setShowConfirm(false);
     try {
-      const { error } = await getClient().account.claimBalance(cb.id);
+      const { error } = await client.account.claimBalance(cb.id);
       if (!error) {
         setClaimed(true);
       } else {
@@ -154,19 +155,22 @@ export interface ClaimableBalanceCardProps {
   confirmThreshold?: string;
 }
 
-export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardProps = {}) {
-  const { address, isConnected } = useSorokit();
+export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardProps) {
+  const { isConnected, address, client } = useSorokit();
   const [balances, setBalances] = useState<ClaimableBalance[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!address) return;
+    if (!address || !client) {
+      setLoading(false);
+      return;
+    }
 
     let active = true;
     const timerId = window.setTimeout(() => {
       setLoading(true);
-      getClient()
+      client
         .account.getClaimableBalances(address)
         .then(({ data, error: err }) => {
           if (!active) return;
@@ -185,7 +189,7 @@ export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardP
       active = false;
       window.clearTimeout(timerId);
     };
-  }, [address]);
+  }, [address, client]);
 
   if (!isConnected) return null;
 

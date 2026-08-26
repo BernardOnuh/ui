@@ -2,7 +2,7 @@ import { Refresh01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useCallback, useEffect, useId, useState } from "react";
 
-import { getClient } from "@/lib/client";
+import { useSorokit } from "@/context/useSorokit";
 import { cn } from "@/lib/utils";
 
 const STROOPS_PER_XLM = 10_000_000;
@@ -88,17 +88,19 @@ export function TransactionFeeCalculator({
   operations = ["payment"],
   refreshInterval = 0,
 }: TransactionFeeCalculatorProps) {
+  const { client } = useSorokit();
   const titleId = useId();
   const [feeData, setFeeData] = useState<FeeBreakdown[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!client) return;
     setLoading(true);
     setError(null);
     try {
       const { data, error: err } =
-        await getClient().transaction.estimateDetailedFee({
+        await client.transaction.estimateDetailedFee({
           operations,
         });
 
@@ -165,7 +167,7 @@ export function TransactionFeeCalculator({
     } finally {
       setLoading(false);
     }
-  }, [operations]);
+  }, [client, operations]);
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {

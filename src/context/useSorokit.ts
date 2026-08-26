@@ -1,8 +1,11 @@
 import { useContext } from "react";
 
+import { getClient } from "@/lib/client";
+
 import { SorokitContext, type SorokitState } from "./SorokitContext";
 
 const safeDefaults: SorokitState = {
+  client: getClient(),
   address: null,
   walletName: null,
   isConnected: false,

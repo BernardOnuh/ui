@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useSorokit } from "@/context/useSorokit";
 import type { Transaction } from "@/lib/client";
-import { getClient } from "@/lib/client";
 import { cn, truncateAddress } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -233,7 +232,7 @@ export function TransactionHistory({
   endDate,
   showTrend,
 }: TransactionHistoryProps = {}) {
-  const { address, isConnected, network } = useSorokit();
+  const { address, isConnected, network, client } = useSorokit();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [multiOpOnly, setMultiOpOnly] = useState(false);
   const [txs, setTxs] = useState<Transaction[]>([]);
@@ -256,12 +255,12 @@ export function TransactionHistory({
   }, [address]);
 
   useEffect(() => {
-    if (!address) return;
+    if (!address || !client) return;
 
     let active = true;
     const timerId = window.setTimeout(() => {
       setLoading(true);
-      getClient()
+      client
         .transaction.getHistory(address, page, PAGE_SIZE)
         .then(({ data, error: err, total: t }) => {
           if (!active) return;
@@ -282,7 +281,7 @@ export function TransactionHistory({
       active = false;
       window.clearTimeout(timerId);
     };
-  }, [address, page]);
+  }, [address, client, page]);
 
   const totalPages = total > 0 ? Math.ceil(total / PAGE_SIZE) : 0;
 

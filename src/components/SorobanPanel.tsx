@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useSorokit } from "@/context/useSorokit";
-import { getClient } from "@/lib/client";
 
 import { ContractInteractionDebugger } from "./ContractInteractionDebugger";
 
@@ -88,7 +87,7 @@ export function SorobanPanel({
   onContractIdChange,
   mode = "invoke",
 }: SorobanPanelProps) {
-  const { isConnected, address } = useSorokit();
+  const { isConnected, address, client } = useSorokit();
   const [method, setMethod] = useState("");
   const [args, setArgs] = useState("");
   const [state, setState] = useState<State>("idle");
@@ -153,7 +152,8 @@ export function SorobanPanel({
         if (!signal.aborted) setState("error");
         return;
       }
-      const soroban = getClient().soroban;
+      if (!client) return;
+      const soroban = client.soroban;
       if (mode === "simulate") {
         const { data, error: err } = await soroban.simulateContract({
           contractId: contractId.trim(),

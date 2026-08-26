@@ -36,10 +36,14 @@ export function SorokitProvider({
       return [];
     }
   });
-  const [error, setError] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [networkError, setNetworkError] = useState<string | null>(null);
+  const [walletError, setWalletError] = useState<string | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [errorSeverity, setErrorSeverity] = useState<"info" | "error">("error");
   const [errorHistory, setErrorHistory] = useState<string[]>([]);
+
+  const error = accountError ?? networkError ?? walletError ?? null;
 
   const onErrorRef = useRef(onError);
   useEffect(() => {
@@ -75,7 +79,15 @@ export function SorokitProvider({
 
   const reportError = useCallback(
     (err: string, source: string, severity: "info" | "error" = "error") => {
-      setError(err);
+      if (source === "account") {
+        setAccountError(err);
+      } else if (source === "network") {
+        setNetworkError(err);
+      } else if (source === "wallet") {
+        setWalletError(err);
+      } else {
+        setAccountError(err);
+      }
       setErrorSeverity(severity);
       setErrorHistory((prev) => [...prev, err]);
       onErrorRef.current?.(err, source);
@@ -176,7 +188,7 @@ export function SorokitProvider({
 
   const connectWallet = useCallback(async () => {
     setIsConnecting(true);
-    setError(null);
+    setWalletError(null);
     try {
       const name = detectWalletName();
       setWalletName(name);
@@ -187,7 +199,7 @@ export function SorokitProvider({
       }
       if (data?.address) {
         setAddress(data.address);
-        setError(null);
+        setWalletError(null);
       } else {
         // #353 — data and error both empty (e.g. the user dismissed the
         // wallet dialog without picking one) previously left the UI stuck:
@@ -221,6 +233,9 @@ export function SorokitProvider({
       setWalletName(null);
       setAccount(null);
       setBalances([]);
+      setAccountError(null);
+      setNetworkError(null);
+      setWalletError(null);
       // #353 — a fresh session shouldn't carry over error history from
       // whatever the previous wallet connection ran into.
       setErrorHistory([]);
@@ -240,7 +255,7 @@ export function SorokitProvider({
         return;
       }
       if (data) {
-        setError(null);
+        setNetworkError(null);
         setNetwork(data);
 
         // Re-point the `getClient()` singleton at the new network. Without
@@ -291,7 +306,11 @@ export function SorokitProvider({
     [switchNetwork],
   );
 
-  const clearError = useCallback(() => setError(null), []);
+  const clearError = useCallback(() => {
+    setAccountError(null);
+    setNetworkError(null);
+    setWalletError(null);
+  }, []);
 
   const refreshAccount = useCallback(async () => {
     if (!address || isRefreshingRef.current) return;
@@ -314,6 +333,7 @@ export function SorokitProvider({
 
   const value = useMemo(
     () => ({
+      client: clientRef.current,
       address,
       walletName,
       isConnected: !!address,
@@ -332,11 +352,15 @@ export function SorokitProvider({
       customNetworks,
       addCustomNetwork,
       error,
+      accountError,
+      networkError,
+      walletError,
       errorSeverity,
       errorHistory,
       clearError,
     }),
     [
+      client,
       address,
       walletName,
       isConnecting,
@@ -353,6 +377,9 @@ export function SorokitProvider({
       customNetworks,
       addCustomNetwork,
       error,
+      accountError,
+      networkError,
+      walletError,
       errorSeverity,
       errorHistory,
       clearError,

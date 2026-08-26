@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useSorokit } from "@/context/useSorokit";
-import { getClient, type NetworkInfo, type TxResult } from "@/lib/client";
+import { type NetworkInfo, type TxResult } from "@/lib/client";
 import { cn, truncateAddress, validateStellarAddress } from "@/lib/utils";
 
 import {
@@ -70,7 +70,7 @@ export function TransactionPanel({
   onError,
   previewMode = true,
 }: TransactionPanelProps = {}) {
-  const { address, isConnected, balances, isLoadingAccount, network, account } = useSorokit();
+  const { address, isConnected, balances, isLoadingAccount, network, account, client } = useSorokit();
   const [dest, setDest] = useState(defaultDestination);
   const [destDirty, setDestDirty] = useState(false);
   const [amount, setAmount] = useState(defaultAmount);
@@ -129,7 +129,7 @@ export function TransactionPanel({
   /** The actual submission — only ever called from the confirm modal. */
   async function submitTransaction() {
     if (state === "loading") return;
-    if (!address) {
+    if (!address || !client) {
       setError("Wallet not connected");
       setState("error");
       return;
@@ -144,7 +144,7 @@ export function TransactionPanel({
     setError(null);
     setResult(null);
     try {
-      const { data, error: err } = await getClient().transaction.submit({
+      const { data, error: err } = await client.transaction.submit({
         source: address,
         destination: dest.trim(),
         amount: amount.trim(),
@@ -188,7 +188,7 @@ export function TransactionPanel({
 
     setIsBuildingPreview(true);
     try {
-      const { data: feeData } = await getClient().transaction.estimateFee();
+      const { data: feeData } = client ? await client.transaction.estimateFee() : { data: null };
       const memoSuffix =
         memoType !== "none" && memo.trim() !== "" ? ` — memo: "${memo.trim()}"` : "";
       setPreview({
