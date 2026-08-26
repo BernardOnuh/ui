@@ -7,6 +7,21 @@ vi.mock("@/lib/client", () => ({
   getClient: vi.fn(),
 }));
 
+// Issue #442 / context refactor: the components read their client from
+// SorokitContext, so the hook is routed at the same `getClient` mock every test
+// below configures. Without this the mocked client never reaches the component.
+vi.mock("@/context/useSorokit", async () => {
+  const { getClient } = await import("@/lib/client");
+  return {
+    useSorokit: () => ({
+      client: getClient(),
+      isConnected: true,
+      address: "GTEST",
+    }),
+  };
+});
+
+
 import type { SorokitClient } from "@/lib/client";
 import { getClient } from "@/lib/client";
 
@@ -245,5 +260,66 @@ describe("FeeEstimator", { timeout: 15000 }, () => {
       expect(FeeCell).toBeDefined();
       expect(typeof FeeCell).toBe("function");
     });
+  });
+});
+
+// ── Issue #442: `load` identity must not depend on an inline onFeeLoad ───────
+describe("FeeEstimator — issue #442", () => {
+  function mockFee() {
+    const estimateFee = vi
+      .fn()
+      .mockResolvedValue({ data: { baseFee: "100", recommended: "500" }, error: null });
+    vi.mocked(getClient).mockReturnValue({
+      transaction: { estimateFee },
+    } as unknown as SorokitClient);
+    return estimateFee;
+  }
+
+  async function settle() {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("makes exactly one request on mount", async () => {
+    const estimateFee = mockFee();
+    render(<FeeEstimator />);
+    await waitFor(() => expect(estimateFee).toHaveBeenCalledTimes(1));
+    await settle();
+    expect(estimateFee).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not refetch when the parent re-renders with a new inline onFeeLoad", async () => {
+    const estimateFee = mockFee();
+    const seen = vi.fn();
+
+    const { rerender } = render(<FeeEstimator onFeeLoad={(f) => seen(f)} />);
+    await waitFor(() => expect(estimateFee).toHaveBeenCalledTimes(1));
+
+    // A fresh arrow on each render used to rebuild `load` and refetch.
+    rerender(<FeeEstimator onFeeLoad={(f) => seen(f)} />);
+    rerender(<FeeEstimator onFeeLoad={(f) => seen(f)} />);
+    await settle();
+
+    expect(estimateFee).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls the latest onFeeLoad, not the one captured at mount", async () => {
+    mockFee();
+    const first = vi.fn();
+    const second = vi.fn();
+
+    const { rerender } = render(<FeeEstimator onFeeLoad={first} />);
+    await waitFor(() => expect(first).toHaveBeenCalledTimes(1));
+
+    rerender(<FeeEstimator onFeeLoad={second} />);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh fee estimate" }));
+
+    await waitFor(() => expect(second).toHaveBeenCalledTimes(1));
+    expect(first).toHaveBeenCalledTimes(1);
   });
 });

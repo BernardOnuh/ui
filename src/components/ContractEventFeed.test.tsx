@@ -10,6 +10,21 @@ vi.mock("@/lib/client", () => ({
   getClient: vi.fn(),
 }));
 
+// Issue #442 / context refactor: the components read their client from
+// SorokitContext, so the hook is routed at the same `getClient` mock every test
+// below configures. Without this the mocked client never reaches the component.
+vi.mock("@/context/useSorokit", async () => {
+  const { getClient } = await import("@/lib/client");
+  return {
+    useSorokit: () => ({
+      client: getClient(),
+      isConnected: true,
+      address: "GTEST",
+    }),
+  };
+});
+
+
 const CONTRACT_ID = "CAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA";
 
 const MOCK_EVENT: ContractEvent = {
@@ -400,7 +415,7 @@ describe("ContractEventFeed", () => {
       act(() => { vi.advanceTimersByTime(0); });
 
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: /export json/i })).toBeDisabled();
+        expect(screen.getByRole("button", { name: /export \d+ events? as json/i })).toBeDisabled();
       });
     });
 
@@ -410,7 +425,7 @@ describe("ContractEventFeed", () => {
       act(() => { vi.advanceTimersByTime(0); });
       await waitFor(() => screen.getByText("transfer"));
 
-      fireEvent.click(screen.getByRole("button", { name: /export json/i }));
+      fireEvent.click(screen.getByRole("button", { name: /export \d+ events? as json/i }));
 
       expect(mockCreateObjectURL).toHaveBeenCalledTimes(1);
       const blob = mockCreateObjectURL.mock.calls[0]![0] as Blob;
@@ -433,7 +448,7 @@ describe("ContractEventFeed", () => {
           downloadName = this.download;
         });
 
-      fireEvent.click(screen.getByRole("button", { name: /export json/i }));
+      fireEvent.click(screen.getByRole("button", { name: /export \d+ events? as json/i }));
 
       expect(clickSpy).toHaveBeenCalledTimes(1);
       expect(downloadName).toBe(`contract-events-${CONTRACT_ID}.json`);
@@ -619,5 +634,144 @@ describe("ContractEventFeed", () => {
         expect(container.querySelector(".animate-pulse")).not.toBeInTheDocument(),
       );
     });
+  });
+});
+
+// ── Issue #442: stale closures, single mount fetch, runtime poll changes ─────
+describe("ContractEventFeed — issue #442", () => {
+  const OTHER_ID = "CBBB4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA";
+
+  function mockEvents(getEvents: ReturnType<typeof vi.fn>) {
+    vi.mocked(getClient).mockReturnValue({
+      soroban: { getEvents },
+    } as unknown as SorokitClient);
+  }
+
+  function evt(id: string, topic: string): ContractEvent {
+    return { ...MOCK_EVENT, id, topics: [topic] };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("fires exactly one request on mount, even with polling enabled", async () => {
+    const getEvents = vi.fn().mockResolvedValue({ data: [], error: null });
+    mockEvents(getEvents);
+
+    render(<ContractEventFeed contractId={CONTRACT_ID} pollInterval={1000} />);
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(1));
+
+    // Well short of the first poll — the polling effect must not have fetched.
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(getEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts polling when pollInterval goes from 0 to a positive value at runtime", async () => {
+    const getEvents = vi.fn().mockResolvedValue({ data: [], error: null });
+    mockEvents(getEvents);
+
+    const { rerender } = render(
+      <ContractEventFeed contractId={CONTRACT_ID} pollInterval={0} />,
+    );
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(getEvents).toHaveBeenCalledTimes(1);
+
+    rerender(<ContractEventFeed contractId={CONTRACT_ID} pollInterval={1000} />);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(2));
+  });
+
+  it("re-arms the timer at the new period when pollInterval changes", async () => {
+    const getEvents = vi.fn().mockResolvedValue({ data: [], error: null });
+    mockEvents(getEvents);
+
+    const { rerender } = render(
+      <ContractEventFeed contractId={CONTRACT_ID} pollInterval={1000} />,
+    );
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(2));
+
+    rerender(<ContractEventFeed contractId={CONTRACT_ID} pollInterval={5000} />);
+
+    // The old 1s timer must be gone…
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(getEvents).toHaveBeenCalledTimes(2);
+
+    // …and the new 5s one armed.
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(3));
+  });
+
+  it("discards an in-flight response belonging to the previous contractId", async () => {
+    let resolveOld!: (value: {
+      data: ContractEvent[] | null;
+      error: string | null;
+    }) => void;
+    const oldPending = new Promise<{
+      data: ContractEvent[] | null;
+      error: string | null;
+    }>((resolve) => {
+      resolveOld = resolve;
+    });
+
+    const getEvents = vi
+      .fn()
+      .mockReturnValueOnce(oldPending)
+      .mockResolvedValue({ data: [evt("evt-new", "NEW-EVT")], error: null });
+    mockEvents(getEvents);
+
+    const { rerender } = render(<ContractEventFeed contractId={CONTRACT_ID} />);
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(1));
+
+    // Switch contracts while the first request is still in flight.
+    rerender(<ContractEventFeed contractId={OTHER_ID} />);
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("NEW-EVT")).toBeInTheDocument();
+
+    // The stale response lands late and must be dropped.
+    await act(async () => {
+      resolveOld({ data: [evt("evt-old", "OLD-EVT")], error: null });
+    });
+
+    expect(screen.queryByText("OLD-EVT")).not.toBeInTheDocument();
+    expect(screen.getByText("NEW-EVT")).toBeInTheDocument();
   });
 });
