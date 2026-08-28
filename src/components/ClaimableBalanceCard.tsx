@@ -27,9 +27,10 @@ interface BalanceRowProps {
   cb: ClaimableBalance;
   confirmThreshold?: string;
   currentTime?: number;
+  onClaimSuccess?: (balanceId: string) => void;
 }
 
-function BalanceRow({ cb, confirmThreshold, currentTime = Date.now() }: BalanceRowProps) {
+function BalanceRow({ cb, confirmThreshold, currentTime = Date.now(), onClaimSuccess }: BalanceRowProps) {
   const { client } = useSorokit();
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
@@ -60,9 +61,12 @@ function BalanceRow({ cb, confirmThreshold, currentTime = Date.now() }: BalanceR
       const { error } = await client.account.claimBalance(cb.id);
       if (!error) {
         setClaimed(true);
+        onClaimSuccess?.(cb.id);
       } else {
         setClaimError(error);
       }
+    } catch (e) {
+      setClaimError(e instanceof Error ? e.message : "Failed to claim balance.");
     } finally {
       setClaiming(false);
     }
@@ -161,6 +165,10 @@ export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  function handleClaimSuccess(balanceId: string) {
+    setBalances((prev) => prev.filter((b) => b.id !== balanceId));
+  }
+
   useEffect(() => {
     if (!address || !client) {
       setLoading(false);
@@ -235,7 +243,7 @@ export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardP
       ) : (
         <div>
           {balances.map((cb) => (
-            <BalanceRow key={cb.id} cb={cb} confirmThreshold={confirmThreshold} />
+            <BalanceRow key={cb.id} cb={cb} confirmThreshold={confirmThreshold} onClaimSuccess={handleClaimSuccess} />
           ))}
         </div>
       )}
