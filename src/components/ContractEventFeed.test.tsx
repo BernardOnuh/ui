@@ -69,6 +69,21 @@ describe("ContractEventFeed", () => {
     });
   });
 
+  it("fetches events on mount with the contractId and the default limit", async () => {
+    const getEvents = vi.fn().mockResolvedValue({ data: [MOCK_EVENT], error: null });
+    vi.mocked(getClient).mockReturnValue({
+      soroban: { getEvents },
+    } as unknown as SorokitClient);
+
+    render(<ContractEventFeed contractId={CONTRACT_ID} />);
+    act(() => { vi.advanceTimersByTime(0); });
+
+    await waitFor(() => {
+      expect(getEvents).toHaveBeenCalledWith(CONTRACT_ID, 10, undefined);
+    });
+    expect(getEvents).toHaveBeenCalledTimes(1);
+  });
+
   it("renders 'No events found' when the events array is empty", async () => {
     mockGetEvents({ data: [], error: null });
 
@@ -125,6 +140,33 @@ describe("ContractEventFeed", () => {
     // Advance well past interval — no new calls should happen
     act(() => { vi.advanceTimersByTime(1500); });
     expect(getEvents).toHaveBeenCalledTimes(callsAfterPause);
+  });
+
+  it("restarts polling when the Live/Paused toggle is turned back on", async () => {
+    const getEvents = vi.fn().mockResolvedValue({ data: [], error: null });
+    vi.mocked(getClient).mockReturnValue({
+      soroban: { getEvents },
+    } as unknown as SorokitClient);
+
+    render(<ContractEventFeed contractId={CONTRACT_ID} pollInterval={500} />);
+    act(() => { vi.advanceTimersByTime(0); });
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(1));
+
+    // Pause polling.
+    fireEvent.click(screen.getByRole("button", { name: /live/i }));
+    const callsAfterPause = getEvents.mock.calls.length;
+
+    act(() => { vi.advanceTimersByTime(1500); });
+    expect(getEvents).toHaveBeenCalledTimes(callsAfterPause);
+
+    // Resume polling — a fresh interval starts, so one more call fires per
+    // poll interval.
+    fireEvent.click(screen.getByRole("button", { name: /paused/i }));
+    act(() => { vi.advanceTimersByTime(500); });
+    expect(getEvents).toHaveBeenCalledTimes(callsAfterPause + 1);
+
+    act(() => { vi.advanceTimersByTime(500); });
+    expect(getEvents).toHaveBeenCalledTimes(callsAfterPause + 2);
   });
 
   it("triggers a new load when contractId changes", async () => {
