@@ -275,7 +275,7 @@ export function createMockClient(
       getAccount: async () => ({
         data: MOCK_ACCOUNT,
         error: null,
-        status: "success",
+        status: "success" as const,
       }),
       getBalances: async () => ({ data: MOCK_BALANCES, error: null }),
       getClaimableBalances: async () => ({ data: [], error: null }),
@@ -289,15 +289,24 @@ export function createMockClient(
           successful: true,
         },
         error: null,
-        status: "success",
+        status: "success" as const,
       }),
       getStatus: async () => ({ data: "success" as TxStatus, error: null }),
-      getHistory: async (_address: string, page: number = 1, limit: number = 10) => {
-        const p = Math.max(1, page || 1);
-        const l = Math.max(1, limit || 10);
-        const start = (p - 1) * l;
-        const pageItems = MOCK_HISTORY.slice(start, start + l);
-        return { data: pageItems, error: null, total: MOCK_HISTORY.length };
+      getHistory: async (
+        _address: string,
+        page?: number,
+        limit?: number,
+      ) => {
+        const pageSize = limit ?? MOCK_HISTORY.length;
+        const currentPage = page ?? 1;
+        const start = (currentPage - 1) * pageSize;
+        const end = start + pageSize;
+        const data = MOCK_HISTORY.slice(start, end);
+        return {
+          data: data.length > 0 ? data : null,
+          error: null,
+          total: MOCK_HISTORY.length,
+        };
       },
       estimateFee: async () => ({
         data: { baseFee: "100", recommended: "1000" },
@@ -409,12 +418,12 @@ export function createMockClient(
       invokeContract: async (_params: InvokeParams) => ({
         data: null,
         error: null,
-        status: "success",
+        status: "success" as const,
       }),
       simulateContract: async (_params: InvokeParams) => ({
         data: { simulated: true, result: "simulated-output" },
         error: null,
-        status: "success",
+        status: "success" as const,
       }),
       getEvents: async (
         _contractId: string,
@@ -546,7 +555,7 @@ export function createMockClient(
           successful: true,
         },
         error: null,
-        status: "success",
+        status: "success" as const,
       }),
       revokeAllowance: async (_params: {
         sourceAccount: string;
@@ -559,7 +568,7 @@ export function createMockClient(
           successful: true,
         },
         error: null,
-        status: "success",
+        status: "success" as const,
       }),
       estimateAllowanceFee: async (_params: {
         asset: string;

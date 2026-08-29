@@ -53,24 +53,21 @@ describe("mock-client", () => {
   });
 
   it("verifies getHistory paginates correctly across multiple pages", async () => {
-    const { createMockClient } = await import("./mock-client");
+    const { createMockClient, MOCK_HISTORY } = await import("./mock-client");
     const client = createMockClient();
 
-    const page1 = await client.transaction.getHistory("address", 1, 5);
-    const page2 = await client.transaction.getHistory("address", 2, 5);
+    const limit = 2;
+    const page1 = await client.transaction.getHistory("address", 1, limit);
+    const page2 = await client.transaction.getHistory("address", 2, limit);
 
-    expect(page1.data).toBeDefined();
-    expect(page2.data).toBeDefined();
-    expect(page1.data?.length).toBe(5);
-    expect(page2.data?.length).toBe(5);
-    expect(page1.total).toBe(25);
-    expect(page2.total).toBe(25);
-
-    // Verify page 1 and page 2 return completely distinct transactions
-    const page1Hashes = page1.data?.map((tx) => tx.hash);
-    const page2Hashes = page2.data?.map((tx) => tx.hash);
-    expect(page1Hashes).not.toEqual(page2Hashes);
-    expect(page1Hashes?.some((h) => page2Hashes?.includes(h))).toBe(false);
+    expect(page1.data?.length).toBe(limit);
+    expect(page2.data?.length).toBe(limit);
+    expect(page1.data?.map((tx) => tx.hash)).not.toEqual(
+      page2.data?.map((tx) => tx.hash),
+    );
+    expect(page1.data?.[0].hash).toBe(MOCK_HISTORY[0].hash);
+    expect(page2.data?.[0].hash).toBe(MOCK_HISTORY[limit].hash);
+    expect(page1.total).toBe(MOCK_HISTORY.length);
   });
 
   it("verifies instance isolation between multiple createMockClient invocations", async () => {
