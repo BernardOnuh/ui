@@ -20,8 +20,8 @@ import { deterministicMock } from "./deterministic-mock";
 export const MOCK_ADDRESS =
   "GBRPYHIL2CI3WHGSUJGY6O7SROQOMJG7QBCACN4QPKUOQNXJDGONXHPA";
 
-// Generate deterministic mock data (consistent across test runs)
-export const MOCK_HISTORY = deterministicMock.generateMockHistory(5);
+// Generate deterministic mock data (consistent across test runs, 25 items to support multi-page pagination)
+export const MOCK_HISTORY = deterministicMock.generateMockHistory(25);
 export const MOCK_EVENTS = deterministicMock.generateMockEvents(3);
 
 export const NETWORKS = {
@@ -230,9 +230,17 @@ const MOCK_ALLOWANCES: AllowanceEntry[] = [
 ];
 
 /**
- * Create a mock client that satisfies the SorokitClient interface.
- * If called with an invalid network name, returns the error object
- * (backward compatible with simple-error tests).
+ * Mock Strategy:
+ * 
+ * Provides a canonical, standalone implementation of SorokitClient for development,
+ * demo mode (in main.tsx), and component/screen unit testing.
+ * 
+ * Design:
+ * - Single source of truth for mock blockchain data across the entire repository.
+ * - Instance-scoped state: Each invocation of createMockClient() creates an independent
+ *   instance with its own network and connection state, preventing test cross-contamination.
+ * - Proper pagination support: getHistory slices deterministic transaction records by
+ *   page and limit, providing distinct pages and accurate total count for TransactionHistory.
  */
 export function createMockClient(): SorokitClient;
 export function createMockClient(
@@ -241,8 +249,9 @@ export function createMockClient(
 export function createMockClient(
   networkName?: string,
 ): SorokitClient | { data: null; error: string } {
-  const activeNetwork =
+  let activeNetwork =
     networkName && networkName in NETWORKS ? networkName : "testnet";
+  let connectedAddress = MOCK_ADDRESS;
 
   if (networkName && !(networkName in NETWORKS)) {
     const validNetworks = Object.keys(NETWORKS).join(", ");
@@ -255,12 +264,12 @@ export function createMockClient(
   return {
     wallet: {
       connect: async () => ({
-        data: { address: MOCK_ADDRESS },
+        data: { address: connectedAddress },
         error: null,
         status: "success" as const,
       }),
       disconnect: async () => {},
-      getAddress: async () => ({ data: MOCK_ADDRESS, error: null }),
+      getAddress: async () => ({ data: connectedAddress, error: null }),
     },
     account: {
       getAccount: async () => ({
@@ -283,9 +292,12 @@ export function createMockClient(
         status: "success",
       }),
       getStatus: async () => ({ data: "success" as TxStatus, error: null }),
-      getHistory: async (_address: string, _page?: number, limit?: number) => {
-        const history = MOCK_HISTORY.slice(0, limit ?? MOCK_HISTORY.length);
-        return { data: history, error: null, total: history.length };
+      getHistory: async (_address: string, page: number = 1, limit: number = 10) => {
+        const p = Math.max(1, page || 1);
+        const l = Math.max(1, limit || 10);
+        const start = (p - 1) * l;
+        const pageItems = MOCK_HISTORY.slice(start, start + l);
+        return { data: pageItems, error: null, total: MOCK_HISTORY.length };
       },
       estimateFee: async () => ({
         data: { baseFee: "100", recommended: "1000" },
