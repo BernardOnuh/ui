@@ -22,12 +22,23 @@ function mockGetClient(
     .fn()
     .mockResolvedValue({ data: DEFAULT_FEE, error: null }),
 ) {
-  vi.mocked(getClient).mockReturnValue({
+  const client = {
     transaction: {
       submit: submitImpl,
       estimateFee: feeImpl,
     },
-  } as unknown as ReturnType<typeof getClient>);
+  };
+  vi.mocked(getClient).mockReturnValue(
+    client as unknown as ReturnType<typeof getClient>,
+  );
+  // The panel reads the client from the useSorokit context (not the getClient
+  // singleton), so submissions only reach the mocked API when the context
+  // exposes it too.
+  vi.mocked(useSorokit).mockReturnValue({
+    address: "GABC",
+    isConnected: true,
+    client,
+  } as unknown as ReturnType<typeof useSorokit>);
 }
 
 /** Clicks the Send button (label varies by selected asset), waits for the confirmation modal, then confirms. */
@@ -65,6 +76,20 @@ describe("TransactionPanel", () => {
     expect(dialog).toHaveTextContent("Send 10 XLM to");
     expect(dialog).toHaveTextContent("100 stroops");
     expect(dialog).toHaveTextContent("GABC");
+  });
+
+  // Issue #581 — the Send Payment button submits the form natively
+  // (type="submit"), linked to the form via its `form` attribute, instead of
+  // re-dispatching a FormEvent handler through an unsafe `as unknown as`
+  // onClick cast.
+  it("renders the Send Payment button as a type=submit button tied to the form", () => {
+    render(<TransactionPanel />);
+
+    const form = document.querySelector("form");
+    expect(form).not.toBeNull();
+    const sendButton = screen.getByRole("button", { name: /^Send (XLM|USDC)/ });
+    expect(sendButton).toHaveAttribute("type", "submit");
+    expect(sendButton).toHaveAttribute("form", form!.id);
   });
 
   it("does not submit until Confirm & Sign is clicked in the modal", async () => {

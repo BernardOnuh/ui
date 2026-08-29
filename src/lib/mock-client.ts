@@ -407,7 +407,11 @@ export function createMockClient(
     },
     soroban: {
       invokeContract: async (_params: InvokeParams) => ({
-        data: null,
+        data: {
+          success: true,
+          result: { status: "ok", output: "mock-invoke-output" },
+          txHash: deterministicMock.generateTransactionHash(),
+        },
         error: null,
         status: "success" as const,
       }),
