@@ -344,12 +344,23 @@ describe("TransactionHistory", () => {
   describe("pagination reset on address change (#525)", () => {
     const OTHER_ADDRESS = "GBQMSN2ZQMXK5OBRXV5MTZ3PB4DTJVBQZTIEZTBAGMNIJ4XWVCPMFRPD";
 
-    it("resets to page 1 and clears total/txs when the connected address changes", async () => {
-      sessionStorage.setItem(`sorokit-transaction-history-page:${ADDRESS}`, "3");
-      const getHistory = vi.fn().mockResolvedValue({
-        data: Array.from({ length: PAGE_SIZE }, (_, i) => makeTx(i)),
-        error: null,
-        total: 25,
+    it("never reuses the previous account's page number after an address change", async () => {
+      // Page persistence via sessionStorage was removed (fc66b90); the
+      // regression contract is that a page reached for one address can never
+      // leak into the next account's requests.
+      const getHistory = vi.fn().mockImplementation((addr: string) => {
+        if (addr === ADDRESS) {
+          return Promise.resolve({
+            data: Array.from({ length: PAGE_SIZE }, (_, i) => makeTx(i)),
+            error: null,
+            total: 25, // 3 pages
+          });
+        }
+        return Promise.resolve({
+          data: [makeTx(0)],
+          error: null,
+          total: 1, // 1 page
+        });
       });
       vi.mocked(getClient).mockReturnValue({
         transaction: { getHistory },
@@ -357,31 +368,31 @@ describe("TransactionHistory", () => {
 
       const { rerender } = render(<TransactionHistory />);
       act(() => { vi.advanceTimersByTime(0); });
+      await waitFor(() => screen.getByText("Next"));
+
+      // Reach page 2 for the original wallet.
+      fireEvent.click(screen.getByRole("button", { name: /next/i }));
+      act(() => { vi.advanceTimersByTime(0); });
       await waitFor(() =>
-        expect(getHistory).toHaveBeenCalledWith(ADDRESS, 3, PAGE_SIZE),
+        expect(getHistory).toHaveBeenCalledWith(ADDRESS, 2, PAGE_SIZE),
       );
-      await waitFor(() => screen.getByText(/page 3 of 3/i));
+
+      getHistory.mockClear();
 
       // Switch to a different wallet whose history only has one page.
-      getHistory.mockClear();
-      getHistory.mockResolvedValue({
-        data: [makeTx(0)],
-        error: null,
-        total: 1,
-      });
       vi.mocked(useSorokit).mockReturnValue(
         mockUseSorokit({ address: OTHER_ADDRESS, isConnected: true }),
       );
       rerender(<TransactionHistory />);
       act(() => { vi.advanceTimersByTime(0); });
 
-      // The stale page-3 request for the old address must never be issued
-      // for the new address — the reset effect fires before the fetch effect.
-      expect(getHistory).not.toHaveBeenCalledWith(OTHER_ADDRESS, 3, PAGE_SIZE);
+      // The stale page-2 state must never be requested for the new address —
+      // the reset effect fires before the fetch effect.
+      expect(getHistory).not.toHaveBeenCalledWith(OTHER_ADDRESS, 2, PAGE_SIZE);
       await waitFor(() =>
         expect(getHistory).toHaveBeenCalledWith(OTHER_ADDRESS, 1, PAGE_SIZE),
       );
-      expect(screen.queryByText(/page \d+ of 1/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/page \d+ of/i)).not.toBeInTheDocument();
       expect(screen.queryByText("Prev")).not.toBeInTheDocument();
     });
 
