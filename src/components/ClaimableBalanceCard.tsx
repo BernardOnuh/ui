@@ -45,6 +45,7 @@ function BalanceRow({ cb, confirmThreshold, currentTime = Date.now(), onClaimed 
   const amountNum = parseFloat(cb.amount);
   const expired = cb.claimants.some((c) => isPredicateExpired(c.predicate, currentTime));
 
+  // Resolves #580: properly handles claim errors and delegates row removal on success
   async function handleClaim() {
     if (confirmThreshold && amountNum >= parseFloat(confirmThreshold)) {
       setShowConfirm(true);
