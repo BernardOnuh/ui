@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { useSorokit } from "@/context/useSorokit";
-import type { NetworkInfo } from "@/lib/client";
+import type { NetworkInfo, NetworkName } from "@/lib/client";
 
 import { NetworkBanner } from "./NetworkBanner";
 
@@ -14,6 +15,23 @@ function mockNetwork(network: NetworkInfo | null) {
   vi.mocked(useSorokit).mockReturnValue({
     network,
   } as unknown as ReturnType<typeof useSorokit>);
+}
+
+/**
+ * Renders `element` (defaulting to a bare `<NetworkBanner />`) against a
+ * synthetic network built from just its `name` — for tests that only care
+ * about how the banner reacts to an arbitrary/unknown network name, without
+ * spelling out a full `NetworkInfo` fixture (rpcUrl/passphrase/horizonUrl
+ * are irrelevant to `NetworkBanner`, which only ever reads `network.name`).
+ */
+function renderWithNetwork(name: NetworkName, element: ReactElement = <NetworkBanner />) {
+  mockNetwork({
+    name,
+    rpcUrl: "https://example-rpc.test",
+    passphrase: `${name} passphrase`,
+    horizonUrl: "https://example-horizon.test",
+  });
+  return render(element);
 }
 
 const MAINNET_NETWORK: NetworkInfo = {
@@ -140,14 +158,15 @@ describe("NetworkBanner", () => {
     expect(screen.getByText(/test funds only/i)).toBeInTheDocument();
   });
 
-  it("does not render when active section is 'network'", async () => {
-    const { client, container } = renderWithNetwork(
-      "testnet",
+  it("does not render for an arbitrary/unknown network when active section is 'network'", () => {
+    // Companion to the synchronous "renders nothing when active section is
+    // 'network'" case above, using renderWithNetwork's unknown-network path
+    // instead of a known NetworkInfo fixture, so the active-section gate is
+    // proven independent of which network is active.
+    const { container } = renderWithNetwork(
+      "private-testnet" as NetworkName,
       <NetworkBanner active="network" />,
     );
-    await waitFor(() => {
-      expect(client.network.getNetwork).toHaveBeenCalled();
-    });
     expect(container).toBeEmptyDOMElement();
   });
 
