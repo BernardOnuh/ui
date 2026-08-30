@@ -20,58 +20,9 @@ import { TransactionStatusTracker } from "./TransactionStatusTracker";
 
 type State = "idle" | "loading" | "success" | "error";
 
-type MemoType = "none" | "text" | "id";
-
-const MEMO_TYPES: { value: MemoType; label: string }[] = [
-  { value: "text", label: "Text" },
-  { value: "id", label: "ID" },
-  { value: "none", label: "None" },
-];
-
-/**
- * Maps a Stellar network to its Stellar Expert explorer URL segment.
- * Returns `null` for networks Stellar Expert does not index (e.g. futurenet,
- * localnet), in which case the hash is shown as plain text.
- */
-function explorerTxUrl(
-  network: NetworkInfo | null,
-  hash: string,
-): string | null {
-  if (!network) return null;
-  const segment =
-    network.name === "mainnet"
-      ? "public"
-      : network.name === "testnet"
-        ? "testnet"
-        : null;
-  if (!segment) return null;
-  return `https://stellar.expert/explorer/${segment}/tx/${hash}`;
-}
-
-export interface TransactionPanelProps {
-  defaultDestination?: string;
-  defaultAmount?: string;
-  defaultMemo?: string;
-  onSuccess?: (result: TxResult) => void;
-  onError?: (error: string) => void;
-  /**
-   * When true (the default), the footer button opens a confirmation modal
-   * showing transaction details before `submitTransaction` runs. Pass
-   * `false` to submit immediately on click, skipping the preview step.
-   */
-  previewMode?: boolean;
-}
-
-export function TransactionPanel({
-  defaultDestination = "",
-  defaultAmount = "",
-  defaultMemo = "",
-  onSuccess,
-  onError,
-  previewMode = true,
-}: TransactionPanelProps = {}) {
-  const { address, isConnected, balances, isLoadingAccount, network, account, client } = useSorokit();
-  const [dest, setDest] = useState(defaultDestination);
+export function TransactionPanel() {
+  const { address, isConnected, balances } = useSorokit();
+  const [dest, setDest] = useState("");
   const [destDirty, setDestDirty] = useState(false);
   const [amount, setAmount] = useState(defaultAmount);
   const [amountDirty, setAmountDirty] = useState(false);
@@ -118,14 +69,17 @@ export function TransactionPanel({
   const insufficientBalance =
     availableBalance !== undefined && parsedAmount > availableBalance;
 
+  // Get XLM balance from balances array
+  const xlmBalance = balances.find((b) => b.asset === "XLM")?.balance || "0";
+  const xlmBalanceNumber = parseFloat(xlmBalance);
+  const hasSufficientBalance = !isNaN(parsedAmount) && parsedAmount <= xlmBalanceNumber;
+
   const canSubmit =
     isConnected &&
     isDestValid &&
     amount.trim() !== "" &&
     isAmountValid &&
-    isMemoIdValid &&
-    isDecimalPrecisionValid &&
-    !insufficientBalance;
+    hasSufficientBalance;
 
   /** The actual submission — only ever called from the confirm modal. */
   async function submitTransaction() {
@@ -372,6 +326,7 @@ export function TransactionPanel({
               type="number"
               placeholder="0.00"
               min="0.0000001"
+              max={xlmBalanceNumber || undefined}
               step="0.0000001"
               value={amount}
               onChange={(e) => {
@@ -386,24 +341,18 @@ export function TransactionPanel({
                       ? "Amount must be greater than 0"
                       : parsedAmount < 0.0000001
                         ? "Minimum amount is 0.0000001 XLM"
-                        : !isDecimalPrecisionValid
-                          ? "Maximum 7 decimal places allowed"
-                          : insufficientBalance
-                            ? selectedAsset === "XLM"
-                              ? `Amount exceeds available balance (${availableBalance?.toFixed(7) ?? "0"} XLM after minimum reserve)`
-                              : `Insufficient balance. Maximum: ${selectedAssetBalance?.balance ?? "0"}`
-                            : undefined
+                        : !hasSufficientBalance
+                          ? "Insufficient balance"
+                          : undefined
                   : undefined
               }
               disabled={state === "loading"}
             />
-            <Select
-              label="Memo Type"
-              value={memoType}
-              onChange={(e) => {
-                setMemoType(e.target.value as MemoType);
-                setMemo("");
-              }}
+            <Input
+              label="Memo (optional)"
+              placeholder="Text memo"
+              value={memo}
+              onChange={(e) => setMemo(e.target.value || "")}
               disabled={state === "loading"}
             >
               {MEMO_TYPES.map((m) => (
