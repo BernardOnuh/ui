@@ -28,7 +28,6 @@ import { Button } from "@/components/ui/Button";
 import { PieChart } from "@/components/ui/PieChart";
 import { SLICE_COLORS } from "@/components/ui/PieChart";
 import { useSorokit } from "@/context/useSorokit";
-import { getClient } from "@/lib/client";
 import type {
   AllocationDiff,
   PortfolioAsset,
@@ -121,7 +120,7 @@ function randomId(): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function PortfolioRebalancer({ className }: PortfolioRebalancerProps) {
-  const { balances, isConnected, isLoadingAccount, refreshAccount } = useSorokit();
+  const { isConnected, balances, isLoadingAccount, refreshAccount, client } = useSorokit();
 
   // ── Price state ───────────────────────────────────────────────────────────
   const [prices, setPrices] = useState<Record<string, number>>({});
@@ -172,7 +171,7 @@ export function PortfolioRebalancer({ className }: PortfolioRebalancerProps) {
     if (balances.length === 0) return;
     let active = true;
     const codes = balances.map(getAssetCode);
-    fetchPrices(codes).then((p) => {
+    fetchPrices(codes).then((p: Record<string, number>) => {
       if (!active) return;
       setPrices(p);
       setIsPricingLoading(false);
@@ -213,7 +212,7 @@ export function PortfolioRebalancer({ className }: PortfolioRebalancerProps) {
       try {
         // Invoke the swap as a Soroban contract call. In production this would
         // call the AMM contract; here we use the generic invokeContract stub.
-        const { data, error } = await getClient().soroban.invokeContract({
+        const { data, error } = await client.soroban.invokeContract({
           contractId: "rebalancer",
           method: "swap",
           args: [swaps[i].from, swaps[i].to, swaps[i].fromAmount.toFixed(7)],
@@ -266,7 +265,7 @@ export function PortfolioRebalancer({ className }: PortfolioRebalancerProps) {
       totalCostUsd,
     );
     setHistory((h) => [record, ...h]);
-  }, [swaps, execution.isRunning, portfolioAssets, prices, balances, refreshAccount]);
+  }, [swaps, execution.isRunning, portfolioAssets, prices, balances, refreshAccount, client.soroban]);
 
   const cancelExecution = useCallback(() => {
     abortRef.current?.abort();

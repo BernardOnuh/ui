@@ -58,7 +58,17 @@ export {
 } from "./WalletConnectModal";
 
 // Assets
-export { AssetBadge, AssetPill, isKnownAsset } from "./AssetBadge";
+export type {
+  AssetBadgeProps,
+  AssetPillProps,
+} from "./AssetBadge";
+export {
+  ASSET_COLORS,
+  AssetBadge,
+  AssetPill,
+  getAssetColor,
+  isKnownAsset,
+} from "./AssetBadge";
 export type { AssetItem, AssetMeta, SortKey, VerifiedFilter } from "./AssetFilter";
 export { AssetFilter, AssetFilterSkeleton } from "./AssetFilter";
 

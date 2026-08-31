@@ -10,18 +10,18 @@ import { WalletConnectModal } from "./WalletConnectModal";
 
 export function WalletConnectButton() {
   const { isConnected, isConnecting, address, error, clearError, disconnectWallet, isDisconnecting } = useSorokit();
-  const [connectModalOpen] = useState(false);
-  const [copied] = useState(false);
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<number | undefined>(undefined);
 
-  useEffect(() {
+  useEffect(() => {
     if (isConnected) {
       const timerId = window.setTimeout(() => setConnectModalOpen(false), 0);
       return () => window.clearTimeout(timerId);
     }
   }, [isConnected]);
 
-  useEffect(() {
+  useEffect(() => {
     return () => window.clearTimeout(copyTimerRef.current);
   }, []);
 
@@ -78,7 +78,9 @@ export function WalletConnectButton() {
         className="px-2.5 sm:px-4"
         aria-label={isConnecting ? "Connecting..." : "Connect Wallet"}
       >
-        <span className="hidden sm:inline">{isConnecting ? "Connecting..." : "Connect Wallet"}</span>
+        <span className="hidden sm:inline">
+          {isConnecting ? "Connecting..." : "Connect Wallet"}
+        </span>
         <span className="sm:hidden">{isConnecting ? "..." : "Connect"}</span>
       </Button>
       {!isConnected && error && !connectModalOpen && (

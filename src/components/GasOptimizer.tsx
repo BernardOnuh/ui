@@ -3,7 +3,7 @@ import { BulbIcon, CalculatorIcon, CircleGaugeIcon, ClockIcon, Refresh01Icon, Za
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useCallback, useEffect, useState } from "react";
 
-import { getClient } from "@/lib/client";
+import { useSorokit } from "@/context/useSorokit";
 import { cn } from "@/lib/utils";
 
 interface GasOptimizerProps {
@@ -62,9 +62,10 @@ function formatTime(seconds: number): string {
 
 export function GasOptimizer({
   className,
-  operations = ["payment", "manage_data", "change_trust"],
+  operations = ["payment"],
   refreshInterval = 0,
 }: GasOptimizerProps) {
+  const { client } = useSorokit();
   const [gasPriceData, setGasPriceData] = useState<GasPriceData | null>(null);
   const [estimate, setEstimate] = useState<GasEstimate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,12 +74,13 @@ export function GasOptimizer({
   const [scenarioError, setScenarioError] = useState<string | null>(null);
 
   const loadGasData = useCallback(async () => {
+    if (!client) return;
     setLoading(true);
     setError(null);
     try {
       const [gasRes, feeRes] = await Promise.all([
-        getClient().network.getGasPrice(),
-        getClient().transaction.estimateDetailedFee({
+        client.network.getGasPrice(),
+        client.transaction.estimateDetailedFee({
           operations,
           feeMultiplier: customMultiplier,
         }),
@@ -100,13 +102,13 @@ export function GasOptimizer({
     } finally {
       setLoading(false);
     }
-  }, [operations, customMultiplier]);
+  }, [client, operations, customMultiplier]);
 
   const loadScenarios = useCallback(async () => {
-    if (!estimate) return;
+    if (!estimate || !client) return;
     setScenarioError(null);
     try {
-      const { data, error: err } = await getClient().transaction.getFeeScenarios({
+      const { data, error: err } = await client.transaction.getFeeScenarios({
         operations,
         baseGasUnits: estimate.totalGasUnits,
       });
@@ -122,7 +124,7 @@ export function GasOptimizer({
     } catch (e) {
       setScenarioError(e instanceof Error ? e.message : "Failed to load scenarios");
     }
-  }, [estimate, operations]);
+  }, [client, estimate, operations]);
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {

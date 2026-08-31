@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { useSorokit } from "@/context/useSorokit";
 import type { ClaimableBalance } from "@/lib/client";
-import { getClient } from "@/lib/client";
 import { cn, safeFormat, truncateAddress } from "@/lib/utils";
 
 function isPredicateExpired(predicate: unknown, _currentTime: number): boolean {
@@ -28,9 +27,12 @@ interface BalanceRowProps {
   cb: ClaimableBalance;
   confirmThreshold?: string;
   currentTime?: number;
+  /** Called with the balance's id once it has been successfully claimed. */
+  onClaimed?: (id: string) => void;
 }
 
-function BalanceRow({ cb, confirmThreshold, currentTime = Date.now() }: BalanceRowProps) {
+function BalanceRow({ cb, confirmThreshold, currentTime = Date.now(), onClaimed }: BalanceRowProps) {
+  const { client } = useSorokit();
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
@@ -52,16 +54,22 @@ function BalanceRow({ cb, confirmThreshold, currentTime = Date.now() }: BalanceR
   }
 
   async function doClaim() {
+    if (!client) return;
     setClaiming(true);
     setClaimError(null);
     setShowConfirm(false);
     try {
-      const { error } = await getClient().account.claimBalance(cb.id);
-      if (!error) {
-        setClaimed(true);
-      } else {
+      const { data, error } = await client.account.claimBalance(cb.id);
+      if (error) {
         setClaimError(error);
+        return;
       }
+      if (!data) {
+        setClaimError("Claim did not complete — please try again");
+        return;
+      }
+      setClaimed(true);
+      onClaimed?.(cb.id);
     } finally {
       setClaiming(false);
     }
@@ -154,19 +162,21 @@ export interface ClaimableBalanceCardProps {
   confirmThreshold?: string;
 }
 
-export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardProps = {}) {
-  const { address, isConnected } = useSorokit();
+export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardProps) {
+  const { isConnected, address, client } = useSorokit();
   const [balances, setBalances] = useState<ClaimableBalance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!address) return;
+    if (!address || !client) {
+      return;
+    }
 
     let active = true;
     const timerId = window.setTimeout(() => {
       setLoading(true);
-      getClient()
+      client
         .account.getClaimableBalances(address)
         .then(({ data, error: err }) => {
           if (!active) return;
@@ -185,7 +195,11 @@ export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardP
       active = false;
       window.clearTimeout(timerId);
     };
-  }, [address]);
+  }, [address, client]);
+
+  function handleClaimed(id: string) {
+    setBalances((prev) => prev.filter((b) => b.id !== id));
+  }
 
   if (!isConnected) return null;
 
@@ -231,7 +245,12 @@ export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardP
       ) : (
         <div>
           {balances.map((cb) => (
-            <BalanceRow key={cb.id} cb={cb} confirmThreshold={confirmThreshold} />
+            <BalanceRow
+              key={cb.id}
+              cb={cb}
+              confirmThreshold={confirmThreshold}
+              onClaimed={handleClaimed}
+            />
           ))}
         </div>
       )}

@@ -11,7 +11,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { useSorokit } from "@/context/useSorokit";
 import type { AllowanceEntry } from "@/lib/client";
-import { getClient } from "@/lib/client";
 import { cn } from "@/lib/utils";
 
 interface AllowanceManagerProps {
@@ -48,7 +47,7 @@ function truncateAddress(address: string, start = 8, end = 6): string {
 }
 
 export function AllowanceManager({ className }: AllowanceManagerProps) {
-  const { address, isConnected } = useSorokit();
+  const { address, isConnected, client } = useSorokit();
   const [allowances, setAllowances] = useState<AllowanceEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +58,7 @@ export function AllowanceManager({ className }: AllowanceManagerProps) {
 
   const loadAllowances = useCallback(async () => {
     try {
-      const { data, error: err } = await getClient().allowance.getAllowances(sourceAccount);
+      const { data, error: err } = await client.allowance.getAllowances(sourceAccount);
       if (err) {
         setError(err);
         return;
@@ -70,14 +69,14 @@ export function AllowanceManager({ className }: AllowanceManagerProps) {
     } finally {
       setLoading(false);
     }
-  }, [sourceAccount]);
+  }, [client, sourceAccount]);
 
   useEffect(() => {
     let active = true;
-    if (!isConnected || !address) {
+    if (!isConnected || !address || !client) {
       return;
     }
-    getClient()
+    client
       .allowance.getAllowances(sourceAccount)
       .then(({ data, error: err }) => {
         if (!active) return;
@@ -96,7 +95,7 @@ export function AllowanceManager({ className }: AllowanceManagerProps) {
     return () => {
       active = false;
     };
-  }, [address, isConnected, sourceAccount]);
+  }, [address, client, isConnected, sourceAccount]);
 
   const handleIncrease = async (entry: AllowanceEntry) => {
     const key = `${entry.asset}-${entry.spender}`;
@@ -110,7 +109,7 @@ export function AllowanceManager({ className }: AllowanceManagerProps) {
         amount: "100.00",
       };
 
-      const { error: err } = await getClient().allowance.approveAllowance(params);
+      const { error: err } = await client.allowance.approveAllowance(params);
       if (err) {
         setError(err);
         return;
@@ -136,7 +135,7 @@ export function AllowanceManager({ className }: AllowanceManagerProps) {
         amount: newAmount,
       };
 
-      const { error: err } = await getClient().allowance.approveAllowance(params);
+      const { error: err } = await client.allowance.approveAllowance(params);
       if (err) {
         setError(err);
         return;
@@ -161,7 +160,7 @@ export function AllowanceManager({ className }: AllowanceManagerProps) {
         spender: entry.spender,
       };
 
-      const { error: err } = await getClient().allowance.revokeAllowance(params);
+      const { error: err } = await client.allowance.revokeAllowance(params);
       if (err) {
         setError(err);
         return;

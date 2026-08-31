@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useSorokit } from "@/context/useSorokit";
-import { getClient, type GroupedTransaction, type Operation, type TimelineFilter, type TimelineGroup } from "@/lib/client";
+import type { GroupedTransaction, Operation, TimelineFilter, TimelineGroup } from "@/lib/client";
 import { cn, truncateAddress } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -255,7 +255,7 @@ function BigChevronIcon({ expanded }: { expanded: boolean }) {
 }
 
 export function ActivityTimeline({ className }: { className?: string }) {
-  const { address, isConnected, network } = useSorokit();
+  const { address, isConnected, network, client } = useSorokit();
   const [groups, setGroups] = useState<TimelineGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -269,7 +269,7 @@ export function ActivityTimeline({ className }: { className?: string }) {
   const abortRef = useRef<AbortController | null>(null);
 
   const loadTimeline = useCallback(() => {
-    if (!address) return;
+    if (!address || !client) return;
 
     abortRef.current?.abort();
     abortRef.current = new AbortController();
@@ -285,7 +285,7 @@ export function ActivityTimeline({ className }: { className?: string }) {
     if (dateTo) f.dateTo = dateTo;
     if (searchInput.trim()) f.searchQuery = searchInput.trim();
 
-    getClient()
+    client
       .operation.getTimeline({
         address,
         page,
@@ -307,7 +307,7 @@ export function ActivityTimeline({ className }: { className?: string }) {
       .finally(() => {
         setLoading(false);
       });
-  }, [address, page, filters, dateFrom, dateTo, searchInput]);
+  }, [address, client, page, filters, dateFrom, dateTo, searchInput]);
 
   useEffect(() => {
     if (!address) return;
