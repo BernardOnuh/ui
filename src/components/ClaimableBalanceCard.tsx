@@ -165,12 +165,15 @@ export interface ClaimableBalanceCardProps {
 export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardProps) {
   const { isConnected, address, client } = useSorokit();
   const [balances, setBalances] = useState<ClaimableBalance[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function handleClaimSuccess(balanceId: string) {
+    setBalances((prev) => prev.filter((b) => b.id !== balanceId));
+  }
 
   useEffect(() => {
     if (!address || !client) {
-      setLoading(false);
       return;
     }
 
