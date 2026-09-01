@@ -20,7 +20,7 @@ import { deterministicMock } from "./deterministic-mock";
 export const MOCK_ADDRESS =
   "GBRPYHIL2CI3WHGSUJGY6O7SROQOMJG7QBCACN4QPKUOQNXJDGONXHPA";
 
-// Generate deterministic mock data (consistent across test runs, 25 items to support multi-page pagination)
+// Generate deterministic mock data (consistent across test runs)
 export const MOCK_HISTORY = deterministicMock.generateMockHistory(25);
 export const MOCK_EVENTS = deterministicMock.generateMockEvents(3);
 
@@ -294,19 +294,17 @@ export function createMockClient(
       getStatus: async () => ({ data: "success" as TxStatus, error: null }),
       getHistory: async (
         _address: string,
-        page?: number,
+        page: number = 1,
         limit?: number,
       ) => {
-        const pageSize = limit ?? MOCK_HISTORY.length;
-        const currentPage = page ?? 1;
-        const start = (currentPage - 1) * pageSize;
+        const safePage = Math.max(1, page || 1);
+        const pageSize =
+          limit !== undefined && limit > 0 ? limit : MOCK_HISTORY.length;
+        const total = MOCK_HISTORY.length;
+        const start = (safePage - 1) * pageSize;
         const end = start + pageSize;
-        const data = MOCK_HISTORY.slice(start, end);
-        return {
-          data: data.length > 0 ? data : null,
-          error: null,
-          total: MOCK_HISTORY.length,
-        };
+        const history = MOCK_HISTORY.slice(start, end);
+        return { data: history, error: null, total };
       },
       estimateFee: async () => ({
         data: { baseFee: "100", recommended: "1000" },
@@ -444,10 +442,12 @@ export function createMockClient(
       }),
       switchNetwork: async (param: NetworkName | NetworkInfo) => {
         if (typeof param === "object" && param !== null) {
+          activeNetwork = param.name;
           return { data: { status: "online", ...param }, error: null };
         }
         const info = MOCK_NETWORK_INFO[param];
         if (info) {
+          activeNetwork = param;
           return { data: info, error: null };
         }
         return { data: null, error: `Invalid network: ${param}` };
