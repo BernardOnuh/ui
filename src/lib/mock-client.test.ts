@@ -90,9 +90,8 @@ describe("mock-client", () => {
     expect(res.total).toBe(MOCK_HISTORY.length);
   });
 
-  it("verifies getHistory returns distinct pages via the page parameter", async () => {
-    const { createMockClient } = await import("./mock-client");
-    const { MOCK_HISTORY } = await import("./mock-client");
+  it("verifies getHistory paginates correctly across multiple pages", async () => {
+    const { createMockClient, MOCK_HISTORY } = await import("./mock-client");
     const client = createMockClient();
 
     const limit = 2;
@@ -108,4 +107,18 @@ describe("mock-client", () => {
     expect(page2.data?.[0].hash).toBe(MOCK_HISTORY[limit].hash);
     expect(page1.total).toBe(MOCK_HISTORY.length);
   });
+
+  it("verifies instance isolation between multiple createMockClient invocations", async () => {
+    const { createMockClient } = await import("./mock-client");
+    const clientA = createMockClient("testnet");
+    const clientB = createMockClient("public");
+
+    if ("network" in clientA && "network" in clientB) {
+      const netA = await clientA.network.getNetwork();
+      const netB = await clientB.network.getNetwork();
+      expect(netA.data?.name).toBe("testnet");
+      expect(netB.data?.name).toBe("mainnet");
+    }
+  });
 });
+
