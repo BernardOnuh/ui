@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useSorokit } from "@/context/useSorokit";
+import { useIsVisible } from "@/hooks/useIsVisible";
 import { cn, toXLM } from "@/lib/utils";
 
 export interface FeeData {
@@ -74,6 +75,13 @@ export function FeeEstimator({
   // mount makes exactly one request and a changed `refreshInterval` re-arms the
   // timer at the new period.
   useEffect(() => {
+    // Dashboard keeps a visited screen mounted (rather than unmounting it)
+    // to preserve in-progress state — see the comment in Dashboard.tsx.
+    // That means a screen navigated away from is still mounted, just
+    // hidden; without this check, a refreshInterval keeps firing network
+    // requests for a screen the user can no longer see (#533).
+    if (!isVisible) return;
+
     const timerId = window.setTimeout(() => {
       void load();
     }, 0);
@@ -89,7 +97,7 @@ export function FeeEstimator({
     return () => {
       window.clearTimeout(timerId);
     };
-  }, [load, refreshInterval]);
+  }, [load, refreshInterval, isVisible]);
 
   const compactContent = fee
     ? `Base: ${fee.baseFee} stroops · Recommended: ${fee.recommended} stroops`
@@ -97,6 +105,7 @@ export function FeeEstimator({
 
   return (
     <div
+      ref={containerRef}
       role="region"
       aria-label="Network fee estimate"
       className={cn(

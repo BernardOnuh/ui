@@ -27,9 +27,11 @@ interface BalanceRowProps {
   cb: ClaimableBalance;
   confirmThreshold?: string;
   currentTime?: number;
+  /** Called with the balance's id once it has been successfully claimed. */
+  onClaimed?: (id: string) => void;
 }
 
-function BalanceRow({ cb, confirmThreshold, currentTime = Date.now() }: BalanceRowProps) {
+function BalanceRow({ cb, confirmThreshold, currentTime = Date.now(), onClaimed }: BalanceRowProps) {
   const { client } = useSorokit();
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
@@ -43,6 +45,7 @@ function BalanceRow({ cb, confirmThreshold, currentTime = Date.now() }: BalanceR
   const amountNum = parseFloat(cb.amount);
   const expired = cb.claimants.some((c) => isPredicateExpired(c.predicate, currentTime));
 
+  // Resolves #580: properly handles claim errors and delegates row removal on success
   async function handleClaim() {
     if (confirmThreshold && amountNum >= parseFloat(confirmThreshold)) {
       setShowConfirm(true);
@@ -57,12 +60,17 @@ function BalanceRow({ cb, confirmThreshold, currentTime = Date.now() }: BalanceR
     setClaimError(null);
     setShowConfirm(false);
     try {
-      const { error } = await client.account.claimBalance(cb.id);
-      if (!error) {
-        setClaimed(true);
-      } else {
+      const { data, error } = await client.account.claimBalance(cb.id);
+      if (error) {
         setClaimError(error);
+        return;
       }
+      if (!data) {
+        setClaimError("Claim did not complete — please try again");
+        return;
+      }
+      setClaimed(true);
+      onClaimed?.(cb.id);
     } finally {
       setClaiming(false);
     }
@@ -158,12 +166,15 @@ export interface ClaimableBalanceCardProps {
 export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardProps) {
   const { isConnected, address, client } = useSorokit();
   const [balances, setBalances] = useState<ClaimableBalance[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function handleClaimSuccess(balanceId: string) {
+    setBalances((prev) => prev.filter((b) => b.id !== balanceId));
+  }
 
   useEffect(() => {
     if (!address || !client) {
-      setLoading(false);
       return;
     }
 
@@ -190,6 +201,10 @@ export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardP
       window.clearTimeout(timerId);
     };
   }, [address, client]);
+
+  function handleClaimed(id: string) {
+    setBalances((prev) => prev.filter((b) => b.id !== id));
+  }
 
   if (!isConnected) return null;
 
@@ -235,7 +250,12 @@ export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardP
       ) : (
         <div>
           {balances.map((cb) => (
-            <BalanceRow key={cb.id} cb={cb} confirmThreshold={confirmThreshold} />
+            <BalanceRow
+              key={cb.id}
+              cb={cb}
+              confirmThreshold={confirmThreshold}
+              onClaimed={handleClaimed}
+            />
           ))}
         </div>
       )}

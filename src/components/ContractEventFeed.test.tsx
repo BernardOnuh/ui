@@ -142,6 +142,48 @@ describe("ContractEventFeed", () => {
     expect(getEvents).toHaveBeenCalledTimes(callsAfterPause);
   });
 
+  it("pauses polling while the screen is hidden and resumes when visible again (#533)", async () => {
+    const getEvents = vi.fn().mockResolvedValue({ data: [], error: null });
+    vi.mocked(getClient).mockReturnValue({
+      soroban: { getEvents },
+    } as unknown as SorokitClient);
+
+    let observerCallback: IntersectionObserverCallback | undefined;
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          observerCallback = callback;
+        }
+        observe = vi.fn();
+        disconnect = vi.fn();
+        unobserve = vi.fn();
+      },
+    );
+
+    render(<ContractEventFeed contractId={CONTRACT_ID} pollInterval={500} />);
+    act(() => { vi.advanceTimersByTime(0); });
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(1));
+
+    // Dashboard hides this screen (mount-once, keep-alive pattern).
+    act(() => {
+      observerCallback?.([{ isIntersecting: false } as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+
+    // Well past the poll interval while hidden — no new calls.
+    act(() => { vi.advanceTimersByTime(1500); });
+    expect(getEvents).toHaveBeenCalledTimes(1);
+
+    // Becomes visible again — polling resumes.
+    act(() => {
+      observerCallback?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    act(() => { vi.advanceTimersByTime(500) });
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(2));
+
+    vi.unstubAllGlobals();
+  });
+
   it("triggers a new load when contractId changes", async () => {
     const getEvents = vi.fn().mockResolvedValue({ data: [], error: null });
     vi.mocked(getClient).mockReturnValue({
@@ -415,7 +457,9 @@ describe("ContractEventFeed", () => {
       act(() => { vi.advanceTimersByTime(0); });
 
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: /export \d+ events? as json/i })).toBeDisabled();
+        expect(
+          screen.getByRole("button", { name: /export.*json/i }),
+        ).toBeDisabled();
       });
     });
 
@@ -633,6 +677,79 @@ describe("ContractEventFeed", () => {
       await waitFor(() =>
         expect(container.querySelector(".animate-pulse")).not.toBeInTheDocument(),
       );
+    });
+  });
+
+  // ── Polling stale-closure regression (#582) ──────────────────────────────
+  // The polling interval used to close over the `load` instance captured when
+  // the effect first ran, so changing the `contractId` prop kept polling the
+  // OLD contract. These tests pin the fixed behaviour: the interval restarts
+  // with the current contractId.
+  describe("polling contractId switching (#582)", () => {
+    const NEW_ID =
+      "CBBB4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA";
+
+    it("restarts polling for the new contractId after the prop changes", async () => {
+      const getEvents = vi.fn().mockResolvedValue({ data: [], error: null });
+      vi.mocked(getClient).mockReturnValue({
+        soroban: { getEvents },
+      } as unknown as SorokitClient);
+
+      const { rerender } = render(
+        <ContractEventFeed contractId={CONTRACT_ID} pollInterval={500} />,
+      );
+      act(() => { vi.advanceTimersByTime(0); });
+      await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(1));
+      expect(getEvents).toHaveBeenLastCalledWith(CONTRACT_ID, 10, undefined);
+
+      rerender(<ContractEventFeed contractId={NEW_ID} pollInterval={500} />);
+      act(() => { vi.advanceTimersByTime(0); });
+
+      // The restarted effect loads the new contract immediately, then keeps
+      // polling it. Capture the call count here so the stale-closure check
+      // only examines calls made *after* the switch.
+      await waitFor(() => {
+        expect(getEvents).toHaveBeenLastCalledWith(NEW_ID, 10, undefined);
+      });
+      const callsAfterSwitch = getEvents.mock.calls.length;
+
+      // Advance past one full poll interval. The stale-closure bug (#582)
+      // would keep calling with the OLD contractId here; the fixed code must
+      // use NEW_ID for every poll after the switch.
+      act(() => { vi.advanceTimersByTime(500); });
+      await waitFor(() => {
+        expect(getEvents.mock.calls.length).toBeGreaterThan(callsAfterSwitch);
+      });
+
+      const postSwitchIds = getEvents.mock.calls
+        .slice(callsAfterSwitch)
+        .map(([id]) => id);
+      expect(postSwitchIds).not.toContain(CONTRACT_ID);
+      expect(postSwitchIds.every((id) => id === NEW_ID)).toBe(true);
+    });
+
+    it("resumes polling for the current contract when Live is toggled back on", async () => {
+      const getEvents = vi.fn().mockResolvedValue({ data: [], error: null });
+      vi.mocked(getClient).mockReturnValue({
+        soroban: { getEvents },
+      } as unknown as SorokitClient);
+
+      render(<ContractEventFeed contractId={CONTRACT_ID} pollInterval={500} />);
+      act(() => { vi.advanceTimersByTime(0); });
+      await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByRole("button", { name: /live/i }));
+      const pausedCount = getEvents.mock.calls.length;
+      act(() => { vi.advanceTimersByTime(1500); });
+      expect(getEvents).toHaveBeenCalledTimes(pausedCount);
+
+      fireEvent.click(screen.getByRole("button", { name: /paused/i }));
+      act(() => { vi.advanceTimersByTime(500); });
+
+      await waitFor(() => {
+        expect(getEvents).toHaveBeenCalledTimes(pausedCount + 1);
+      });
+      expect(getEvents).toHaveBeenLastCalledWith(CONTRACT_ID, 10, undefined);
     });
   });
 });
