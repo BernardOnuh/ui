@@ -41,6 +41,8 @@ export { Input } from "./ui/Input";
 export { LabelledValue } from "./ui/LabelledValue";
 export { Separator } from "./ui/Separator";
 export { AssetRowSkeleton, Skeleton, SkeletonCard, SkeletonRow } from "./ui/Skeleton";
+export type { InfoCellProps } from "./ui/InfoCell";
+export { InfoCell } from "./ui/InfoCell";
 
 // Error handling
 export { ErrorBoundary } from "./ErrorBoundary";

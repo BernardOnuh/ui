@@ -3,11 +3,36 @@ import { cn, truncateAddress } from "@/lib/utils";
 
 export const ASSET_COLORS: Record<string, { bg: string; text: string }> = {
   XLM: { bg: "bg-[rgba(20,184,166,0.12)]", text: "text-teal" },
+  yXLM: { bg: "bg-[rgba(34,197,94,0.12)]", text: "text-green" },
   USDC: { bg: "bg-[rgba(86,69,212,0.12)]", text: "text-brand" },
   USDT: { bg: "bg-success-dim-strong", text: "text-green" },
   BTC: { bg: "bg-[rgba(249,115,22,0.12)]", text: "text-orange" },
   ETH: { bg: "bg-[rgba(168,85,247,0.12)]", text: "text-purple" },
+  AQUA: { bg: "bg-[rgba(59,130,246,0.12)]", text: "text-blue" },
+  SHX: { bg: "bg-[rgba(236,72,153,0.12)]", text: "text-pink" },
+  BLND: { bg: "bg-[rgba(236,204,41,0.12)]", text: "text-yellow" },
 };
+
+const FALLBACK_COLOR_PALETTE = [
+  { bg: "bg-[rgba(168,85,247,0.12)]", text: "text-purple" },
+  { bg: "bg-[rgba(59,130,246,0.12)]", text: "text-blue" },
+  { bg: "bg-[rgba(236,72,153,0.12)]", text: "text-pink" },
+  { bg: "bg-[rgba(236,204,41,0.12)]", text: "text-yellow" },
+  { bg: "bg-[rgba(34,197,94,0.12)]", text: "text-green" },
+  { bg: "bg-[rgba(249,115,22,0.12)]", text: "text-orange" },
+  { bg: "bg-[rgba(14,165,233,0.12)]", text: "text-cyan" },
+  { bg: "bg-[rgba(229,57,53,0.12)]", text: "text-red" },
+];
+
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash);
+}
 
 export function getAssetColor(
   code: string,
@@ -21,17 +46,18 @@ export function getAssetColor(
     );
     if (matchedKey && colorMap[matchedKey]) return colorMap[matchedKey];
   }
-  return (
-    ASSET_COLORS[code] ??
-    ASSET_COLORS[code.toUpperCase()] ?? { bg: "bg-surface-2", text: "text-ink-2" }
-  );
+  if (ASSET_COLORS[code]) return ASSET_COLORS[code];
+  const upper = code.toUpperCase();
+  if (ASSET_COLORS[upper]) return ASSET_COLORS[upper];
+  const hash = hashCode(code);
+  return FALLBACK_COLOR_PALETTE[hash % FALLBACK_COLOR_PALETTE.length];
 }
 
 /**
  * Assets whose issuer is well known enough that printing the issuer address
  * next to the code is noise rather than information.
  */
-const KNOWN_ASSETS = new Set(["XLM", "USDC", "USDT", "BTC", "ETH"]);
+const KNOWN_ASSETS = new Set(["XLM", "yXLM", "USDC", "USDT", "BTC", "ETH", "AQUA", "SHX", "BLND"]);
 
 /** Whether `code` is in the built-in known-asset registry. */
 export function isKnownAsset(code: string): boolean {
@@ -46,6 +72,11 @@ export interface AssetBadgeProps {
    * (XLM, USDC, USDT, BTC, ETH). Takes precedence over `showIssuer`.
    */
   showIssuerForUnknown?: boolean;
+  /**
+   * Appends a short issuer suffix (first 4 + last 4 chars, e.g. "GA5Z...KZVN")
+   * to the asset code label to distinguish multi-issuer tokens sharing the same code.
+   */
+  showIssuerSuffix?: boolean;
   size?: "sm" | "md" | "lg";
   /** Makes the badge an interactive button — e.g. for asset selection. */
   onClick?: () => void;
@@ -58,6 +89,7 @@ export function AssetBadge({
   balance,
   showIssuer = true,
   showIssuerForUnknown,
+  showIssuerSuffix = false,
   size = "md",
   onClick,
   colorMap,
@@ -100,6 +132,11 @@ export function AssetBadge({
     ? !isKnownAsset(code)
     : showIssuer;
 
+  const issuerSuffix =
+    showIssuerSuffix && balance.assetIssuer
+      ? truncateAddress(balance.assetIssuer, 4, 4)
+      : null;
+
   const content = (
     <>
       <div
@@ -117,6 +154,11 @@ export function AssetBadge({
       <div className="flex flex-col gap-0.5 min-w-0">
         <span className={cn("font-medium text-ink leading-none", labelSize)}>
           {code}
+          {issuerSuffix && (
+            <span className="text-ink-3 font-normal ml-1 text-[11px]">
+              ({issuerSuffix})
+            </span>
+          )}
         </span>
         {issuerVisible &&
           (balance.assetType === "native" ? (
