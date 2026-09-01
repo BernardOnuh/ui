@@ -250,7 +250,11 @@ export function ContractEventFeed({
     filterTypes ? new Set(filterTypes) : null,
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [containerRef, isVisible] = useIsVisible<HTMLDivElement>();
+  // Issue #442: generation counter for `load`. Bumped on every call and
+  // whenever `contractId` changes, so a response that arrives after a newer
+  // request started - or after the feed moved to another contract - is
+  // discarded instead of overwriting the current events.
+  const requestIdRef = useRef(0);
 
   // IDs highlighted as newly-arrived. `prevEventIdsRef` is the baseline from
   // the previous successful load — `null` means no baseline yet, so the very
@@ -272,12 +276,30 @@ export function ContractEventFeed({
     setNewEventIds(new Set());
   }
 
+  // Issue #442: `live` is seeded from `pollInterval` at mount, so a runtime
+  // change of the prop has to re-seed it - otherwise a feed mounted with
+  // polling off (pollInterval 0) never starts polling when the prop turns on.
+  // Synced during render, mirroring the `prevContractId` pattern above.
+  const [prevPollInterval, setPrevPollInterval] = useState(pollInterval);
+  if (prevPollInterval !== pollInterval) {
+    setPrevPollInterval(pollInterval);
+    setLive(pollInterval > 0);
+  }
+
   useEffect(() => {
     prevEventIdsRef.current = null;
+    // Issue #442: invalidate whatever `load` has in flight for the previous
+    // contract. This effect is declared before the loading effect, so it runs
+    // first and the fresh load below gets the next generation number.
+    requestIdRef.current += 1;
   }, [contractId]);
 
   const load = useCallback(async () => {
     if (!contractId.trim() || !client) return;
+    // Issue #442: claim a generation up front; anything that resolves once a
+    // newer request exists is stale and must not touch state.
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestId !== requestIdRef.current;
     setLoading(true);
     try {
       const { data, error: err } = await client.soroban.getEvents(
@@ -285,6 +307,7 @@ export function ContractEventFeed({
         limit,
         fromLedger,
       );
+      if (isStale()) return;
       if (err) {
         setError(err);
         setLoading(false);
@@ -312,16 +335,19 @@ export function ContractEventFeed({
       setError(null);
       setLastUpdatedAt(Date.now());
     } catch (e) {
+      if (isStale()) return;
       setError(e instanceof Error ? e.message : "Failed to load events");
     } finally {
-      setLoading(false);
+      // Issue #442: a stale call must not clear the spinner that belongs to the
+      // request that superseded it.
+      if (!isStale()) setLoading(false);
     }
   }, [client, contractId, limit, fromLedger]);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEvents([]);
-  }, [contractId]);
+  // Issue #442: the `setEvents([])` effect that used to sit here (behind a
+  // react-hooks/set-state-in-effect suppression) duplicated the render-phase
+  // reset above and ran again on mount. Removed - the render-phase reset
+  // already clears the previous contract's events without an extra pass.
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
@@ -333,6 +359,10 @@ export function ContractEventFeed({
     };
   }, [load]);
 
+  // Issue #442: polling owns only the timer - the initial fetch belongs to the
+  // effect above, so mount fires exactly one request. Keyed on `pollInterval`,
+  // so changing the prop at runtime tears the old timer down and re-arms a new
+  // one at the new period.
   useEffect(() => {
     // Dashboard keeps a visited screen mounted rather than unmounting it,
     // to preserve in-progress state — see the comment in Dashboard.tsx.
@@ -348,8 +378,15 @@ export function ContractEventFeed({
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
+    if (!live || pollInterval <= 0 || contractId.trim() === "") return;
+    intervalRef.current = setInterval(() => {
+      void load();
+    }, pollInterval);
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
   }, [live, isVisible, pollInterval, load, contractId]);
 
