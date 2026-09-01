@@ -125,6 +125,75 @@ describe("AddressDisplay", () => {
     });
   });
 
+  // ── Copied state reset (#556) ───────────────────────────────────────────
+  describe("copied state reset (#556)", () => {
+    it("keeps 'Address copied' until the 2s timeout, then resets", async () => {
+      vi.useFakeTimers();
+      render(<AddressDisplay address={address} />);
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Copy address to clipboard" }));
+      });
+
+      // Immediately after a successful copy the label flips to "Copied".
+      expect(
+        screen.getByRole("button", { name: "Address copied" }),
+      ).toBeInTheDocument();
+
+      // Still copied just before the 2s window elapses…
+      act(() => {
+        vi.advanceTimersByTime(1999);
+      });
+      expect(
+        screen.getByRole("button", { name: "Address copied" }),
+      ).toBeInTheDocument();
+
+      // …and back to the resting label the moment it elapses.
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(
+        screen.getByRole("button", { name: "Copy address to clipboard" }),
+      ).toBeInTheDocument();
+
+      vi.useRealTimers();
+    });
+
+    it("resets the 2s window when copy is triggered again mid-window", async () => {
+      vi.useFakeTimers();
+      render(<AddressDisplay address={address} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Copy address to clipboard" }));
+      });
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+      expect(
+        screen.getByRole("button", { name: "Address copied" }),
+      ).toBeInTheDocument();
+
+      // Copy again — the label must stay "Address copied" for a fresh full 2s.
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Address copied" }));
+      });
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+      expect(
+        screen.getByRole("button", { name: "Address copied" }),
+      ).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(
+        screen.getByRole("button", { name: "Copy address to clipboard" }),
+      ).toBeInTheDocument();
+
+      vi.useRealTimers();
+    });
+  });
+
   describe("masked prop", () => {
     it("shows GBAM···QQQQ format when masked is true", () => {
       render(<AddressDisplay address={address} masked />);
