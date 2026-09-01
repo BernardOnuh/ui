@@ -72,6 +72,20 @@ describe("TransactionPanel", () => {
     expect(dialog).toHaveTextContent("GBRPYHIL...ONXHPA");
   });
 
+  // Issue #581 — the Send Payment button submits the form natively
+  // (type="submit"), linked to the form via its `form` attribute, instead of
+  // re-dispatching a FormEvent handler through an unsafe `as unknown as`
+  // onClick cast.
+  it("renders the Send Payment button as a type=submit button tied to the form", () => {
+    render(<TransactionPanel />);
+
+    const form = document.querySelector("form");
+    expect(form).not.toBeNull();
+    const sendButton = screen.getByRole("button", { name: /^Send (XLM|USDC)/ });
+    expect(sendButton).toHaveAttribute("type", "submit");
+    expect(sendButton).toHaveAttribute("form", form!.id);
+  });
+
   it("does not submit until Confirm & Sign is clicked in the modal", async () => {
     const mockSubmit = vi.fn().mockResolvedValue({ data: { hash: "h1", ledger: 1 }, error: null });
     mockGetClient(mockSubmit);
