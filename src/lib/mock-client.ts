@@ -241,7 +241,7 @@ export function createMockClient(
 export function createMockClient(
   networkName?: string,
 ): SorokitClient | { data: null; error: string } {
-  const activeNetwork =
+  let activeNetwork =
     networkName && networkName in NETWORKS ? networkName : "testnet";
 
   if (networkName && !(networkName in NETWORKS)) {
@@ -433,10 +433,12 @@ export function createMockClient(
       }),
       switchNetwork: async (param: NetworkName | NetworkInfo) => {
         if (typeof param === "object" && param !== null) {
+          activeNetwork = param.name;
           return { data: { status: "online", ...param }, error: null };
         }
         const info = MOCK_NETWORK_INFO[param];
         if (info) {
+          activeNetwork = param;
           return { data: info, error: null };
         }
         return { data: null, error: `Invalid network: ${param}` };

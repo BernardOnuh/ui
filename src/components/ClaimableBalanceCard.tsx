@@ -168,6 +168,10 @@ export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardP
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function handleClaimSuccess(balanceId: string) {
+    setBalances((prev) => prev.filter((b) => b.id !== balanceId));
+  }
+
   useEffect(() => {
     if (!address || !client) {
       return;
