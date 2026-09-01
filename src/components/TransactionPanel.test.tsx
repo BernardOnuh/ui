@@ -469,8 +469,246 @@ describe("TransactionPanel", () => {
     });
   });
 
-  describe("success state details", () => {
-    it("shows a Successful badge and an explorer link on a known network", async () => {
+  // ── Acceptance criteria ────────────────────────────────────────────────────
+  describe("acceptance criteria", () => {
+    const VALID_DEST = "GCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+
+    it("AC1: Send button is disabled when destination field is empty", () => {
+      render(<TransactionPanel />);
+
+      const sendBtn = screen.getByRole("button", { name: /^Send (XLM|USDC)/ });
+      // destination is empty by default — button must be disabled
+      expect(sendBtn).toBeDisabled();
+
+      // filling the destination (and a valid amount) re-enables it
+      fireEvent.change(screen.getByLabelText("Destination Address"), {
+        target: { value: VALID_DEST },
+      });
+      fireEvent.change(screen.getByLabelText("Amount (XLM)"), {
+        target: { value: "1" },
+      });
+      expect(sendBtn).not.toBeDisabled();
+    });
+
+    it("AC2: Send button is disabled when amount is 0", () => {
+      render(<TransactionPanel />);
+
+      const sendBtn = screen.getByRole("button", { name: /^Send (XLM|USDC)/ });
+      fireEvent.change(screen.getByLabelText("Destination Address"), {
+        target: { value: VALID_DEST },
+      });
+
+      // amount = 0 → below the 0.0000001 minimum → canSubmit is false
+      fireEvent.change(screen.getByLabelText("Amount (XLM)"), {
+        target: { value: "0" },
+      });
+      expect(sendBtn).toBeDisabled();
+    });
+
+    it("AC2: Send button is disabled when amount is negative", () => {
+      render(<TransactionPanel />);
+
+      const sendBtn = screen.getByRole("button", { name: /^Send (XLM|USDC)/ });
+      fireEvent.change(screen.getByLabelText("Destination Address"), {
+        target: { value: VALID_DEST },
+      });
+
+      // negative amount → isAmountValid is false → canSubmit is false
+      fireEvent.change(screen.getByLabelText("Amount (XLM)"), {
+        target: { value: "-5" },
+      });
+      expect(sendBtn).toBeDisabled();
+    });
+
+    it("AC3: Successful submit renders the transaction hash in the success panel", async () => {
+      const TX_HASH = "abc123def456abc123def456abc123def456abc123def456abc123def456";
+      const mockSubmit = vi
+        .fn()
+        .mockResolvedValue({ data: { hash: TX_HASH, ledger: 42 }, error: null });
+      const mockClient = {
+        transaction: {
+          submit: mockSubmit,
+          estimateFee: vi.fn().mockResolvedValue({ data: DEFAULT_FEE, error: null }),
+        },
+      } as unknown as ReturnType<typeof import("@/lib/client").getClient>;
+      vi.mocked(useSorokit).mockReturnValue({
+        address: "GABC",
+        isConnected: true,
+        client: mockClient,
+      } as unknown as ReturnType<typeof useSorokit>);
+
+      render(<TransactionPanel />);
+
+      fireEvent.change(screen.getByLabelText("Destination Address"), {
+        target: { value: VALID_DEST },
+      });
+      fireEvent.change(screen.getByLabelText("Amount (XLM)"), {
+        target: { value: "5" },
+      });
+
+      await reviewAndConfirm();
+
+      // Success panel must display the transaction hash
+      expect(await screen.findByText("Transaction submitted")).toBeInTheDocument();
+      expect(screen.getByText(TX_HASH)).toBeInTheDocument();
+    });
+
+    it("AC4: Failed submit renders the error message in the error panel", async () => {
+      const ERROR_MSG = "op_underfunded";
+      const mockSubmit = vi
+        .fn()
+        .mockResolvedValue({ data: null, error: ERROR_MSG });
+      const mockClient = {
+        transaction: {
+          submit: mockSubmit,
+          estimateFee: vi.fn().mockResolvedValue({ data: DEFAULT_FEE, error: null }),
+        },
+      } as unknown as ReturnType<typeof import("@/lib/client").getClient>;
+      vi.mocked(useSorokit).mockReturnValue({
+        address: "GABC",
+        isConnected: true,
+        client: mockClient,
+      } as unknown as ReturnType<typeof useSorokit>);
+
+      render(<TransactionPanel />);
+
+      fireEvent.change(screen.getByLabelText("Destination Address"), {
+        target: { value: VALID_DEST },
+      });
+      fireEvent.change(screen.getByLabelText("Amount (XLM)"), {
+        target: { value: "5" },
+      });
+
+      await reviewAndConfirm();
+
+      expect(await screen.findByText("Transaction failed")).toBeInTheDocument();
+      expect(screen.getByText(ERROR_MSG)).toBeInTheDocument();
+    });
+
+    it("AC5: clicking 'New Transaction' after success resets the form back to idle state", async () => {
+      const mockSubmit = vi
+        .fn()
+        .mockResolvedValue({ data: { hash: "somehash", ledger: 1 }, error: null });
+      const mockClient = {
+        transaction: {
+          submit: mockSubmit,
+          estimateFee: vi.fn().mockResolvedValue({ data: DEFAULT_FEE, error: null }),
+        },
+      } as unknown as ReturnType<typeof import("@/lib/client").getClient>;
+      vi.mocked(useSorokit).mockReturnValue({
+        address: "GABC",
+        isConnected: true,
+        client: mockClient,
+      } as unknown as ReturnType<typeof useSorokit>);
+
+      render(<TransactionPanel />);
+
+      fireEvent.change(screen.getByLabelText("Destination Address"), {
+        target: { value: VALID_DEST },
+      });
+      fireEvent.change(screen.getByLabelText("Amount (XLM)"), {
+        target: { value: "5" },
+      });
+
+      await reviewAndConfirm();
+      await screen.findByText("Transaction submitted");
+
+      // The idle form (destination input) should NOT be present yet
+      expect(screen.queryByLabelText("Destination Address")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "New Transaction" }));
+
+      // After reset the idle form is shown again
+      expect(screen.getByLabelText("Destination Address")).toBeInTheDocument();
+      // Success panel is gone
+      expect(screen.queryByText("Transaction submitted")).not.toBeInTheDocument();
+      // Send button is disabled because fields are empty
+      expect(screen.getByRole("button", { name: /^Send (XLM|USDC)/ })).toBeDisabled();
+    });
+
+    it("AC5: clicking 'New Transaction' after error resets the form back to idle state", async () => {
+      const mockSubmit = vi
+        .fn()
+        .mockResolvedValue({ data: null, error: "Insufficient balance" });
+      const mockClient = {
+        transaction: {
+          submit: mockSubmit,
+          estimateFee: vi.fn().mockResolvedValue({ data: DEFAULT_FEE, error: null }),
+        },
+      } as unknown as ReturnType<typeof import("@/lib/client").getClient>;
+      vi.mocked(useSorokit).mockReturnValue({
+        address: "GABC",
+        isConnected: true,
+        client: mockClient,
+      } as unknown as ReturnType<typeof useSorokit>);
+
+      render(<TransactionPanel />);
+
+      fireEvent.change(screen.getByLabelText("Destination Address"), {
+        target: { value: VALID_DEST },
+      });
+      fireEvent.change(screen.getByLabelText("Amount (XLM)"), {
+        target: { value: "5" },
+      });
+
+      await reviewAndConfirm();
+      await screen.findByText("Transaction failed");
+
+      fireEvent.click(screen.getByRole("button", { name: "New Transaction" }));
+
+      // Error panel is gone, idle form is shown
+      expect(screen.queryByText("Transaction failed")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Destination Address")).toBeInTheDocument();
+    });
+
+    it("AC6: pressing Enter inside the destination field submits the form (opens review modal)", async () => {
+      mockGetClient(
+        vi.fn().mockResolvedValue({ data: { hash: "h1", ledger: 1 }, error: null }),
+      );
+
+      render(<TransactionPanel />);
+
+      fireEvent.change(screen.getByLabelText("Destination Address"), {
+        target: { value: VALID_DEST },
+      });
+      fireEvent.change(screen.getByLabelText("Amount (XLM)"), {
+        target: { value: "5" },
+      });
+
+      // Enter key on the destination field should trigger form onSubmit → handleReview
+      fireEvent.submit(screen.getByLabelText("Destination Address").closest("form")!);
+
+      expect(
+        await screen.findByRole("dialog", { name: /confirm transaction/i }),
+      ).toBeInTheDocument();
+    });
+
+    it("AC6: pressing Enter inside the amount field submits the form (opens review modal)", async () => {
+      mockGetClient(
+        vi.fn().mockResolvedValue({ data: { hash: "h1", ledger: 1 }, error: null }),
+      );
+
+      render(<TransactionPanel />);
+
+      fireEvent.change(screen.getByLabelText("Destination Address"), {
+        target: { value: VALID_DEST },
+      });
+      fireEvent.change(screen.getByLabelText("Amount (XLM)"), {
+        target: { value: "5" },
+      });
+
+      // Enter key on the amount field triggers form onSubmit → handleReview
+      fireEvent.submit(screen.getByLabelText("Amount (XLM)").closest("form")!);
+
+      expect(
+        await screen.findByRole("dialog", { name: /confirm transaction/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  // ── previewMode (#315) ──────────────────────────────────────────────────────
+  describe("previewMode", () => {
+    it("submits directly without a confirmation modal when previewMode is false", async () => {
       const mockSubmit = vi
         .fn()
         .mockResolvedValue({ data: { hash: "txhash123", ledger: 100 }, error: null });
