@@ -54,6 +54,7 @@ function BalanceRow({
   const amountNum = parseFloat(cb.amount);
   const expired = cb.claimants.some((c) => isPredicateExpired(c.predicate, currentTime));
 
+  // Resolves #580: properly handles claim errors and delegates row removal on success
   async function handleClaim() {
     if (confirmThreshold && amountNum >= parseFloat(confirmThreshold)) {
       setShowConfirm(true);
@@ -193,7 +194,7 @@ export interface ClaimableBalanceCardProps {
 export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardProps) {
   const { isConnected, address, client } = useSorokit();
   const [balances, setBalances] = useState<ClaimableBalance[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Issue #441: bumped after every successful claim to re-fetch the list so it
   // stays server-consistent.
@@ -219,9 +220,12 @@ export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardP
     setRefreshKey((k) => k + 1);
   }, []);
 
+  function handleClaimSuccess(balanceId: string) {
+    setBalances((prev) => prev.filter((b) => b.id !== balanceId));
+  }
+
   useEffect(() => {
     if (!address || !client) {
-      setLoading(false);
       return;
     }
 
@@ -262,6 +266,10 @@ export function ClaimableBalanceCard({ confirmThreshold }: ClaimableBalanceCardP
       window.clearTimeout(timerId);
     };
   }, [address, client, refreshKey]);
+
+  function handleClaimed(id: string) {
+    setBalances((prev) => prev.filter((b) => b.id !== id));
+  }
 
   if (!isConnected) return null;
 

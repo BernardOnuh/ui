@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { useSorokit } from "@/context/useSorokit";
-import type { NetworkInfo } from "@/lib/client";
+import type { NetworkInfo, NetworkName } from "@/lib/client";
 
 import { NetworkBanner } from "./NetworkBanner";
 
@@ -14,6 +15,23 @@ function mockNetwork(network: NetworkInfo | null) {
   vi.mocked(useSorokit).mockReturnValue({
     network,
   } as unknown as ReturnType<typeof useSorokit>);
+}
+
+/**
+ * Renders `element` (defaulting to a bare `<NetworkBanner />`) against a
+ * synthetic network built from just its `name` — for tests that only care
+ * about how the banner reacts to an arbitrary/unknown network name, without
+ * spelling out a full `NetworkInfo` fixture (rpcUrl/passphrase/horizonUrl
+ * are irrelevant to `NetworkBanner`, which only ever reads `network.name`).
+ */
+function renderWithNetwork(name: NetworkName, element: ReactElement = <NetworkBanner />) {
+  mockNetwork({
+    name,
+    rpcUrl: "https://example-rpc.test",
+    passphrase: `${name} passphrase`,
+    horizonUrl: "https://example-horizon.test",
+  });
+  return render(element);
 }
 
 const MAINNET_NETWORK: NetworkInfo = {
@@ -125,29 +143,32 @@ describe("NetworkBanner", () => {
     ).toHaveTextContent("You are on custom-net — transactions use test funds only");
   });
 
-  it("merges per-network config overrides with the defaults", async () => {
-    renderWithNetwork(
-      "testnet",
+  it("merges per-network config overrides with the defaults", () => {
+    mockNetwork(TESTNET_NETWORK);
+    render(
       <NetworkBanner config={{ testnet: { label: "Staging" } }} />,
     );
-    expect(await screen.findByText(/staging/i)).toBeInTheDocument();
+    expect(screen.getByText("Staging")).toBeInTheDocument();
     expect(screen.getByText(/test funds only/i)).toBeInTheDocument();
   });
 
-  it("shows a generic non-mainnet banner for unknown networks", async () => {
-    renderWithNetwork("private-testnet" as NetworkName);
-    expect(await screen.findByText(/private-testnet/i)).toBeInTheDocument();
+  it("shows a generic non-mainnet banner for unknown networks", () => {
+    mockNetwork({
+      name: "private-testnet",
+      rpcUrl: "http://private-rpc:8000",
+      passphrase: "Private Test Network",
+      horizonUrl: "http://private-horizon:8000",
+    });
+    render(<NetworkBanner />);
+    expect(screen.getByText("private-testnet")).toBeInTheDocument();
     expect(screen.getByText(/test funds only/i)).toBeInTheDocument();
   });
 
-  it("does not render when active section is 'network'", async () => {
-    const { client, container } = renderWithNetwork(
-      "testnet",
+  it("does not render when active section is 'network'", () => {
+    mockNetwork(TESTNET_NETWORK);
+    const { container } = render(
       <NetworkBanner active="network" />,
     );
-    await waitFor(() => {
-      expect(client.network.getNetwork).toHaveBeenCalled();
-    });
     expect(container).toBeEmptyDOMElement();
   });
 
