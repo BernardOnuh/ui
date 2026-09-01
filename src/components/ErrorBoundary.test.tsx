@@ -24,7 +24,27 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+function ThrowingComponent({ shouldThrow }: { shouldThrow: boolean }) {
+  if (shouldThrow) {
+    throw new Error("Test error!");
+  }
+  return <div data-testid="child-content">Child rendered successfully</div>;
+}
+
 describe("ErrorBoundary", () => {
+  it("renders children normally when no error is thrown", () => {
+    render(
+      <ErrorBoundary>
+        <ThrowingComponent shouldThrow={false} />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByTestId("child-content")).toBeInTheDocument();
+    expect(screen.getByText("Child rendered successfully")).toBeInTheDocument();
+    expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
+  });
+
+  it("renders default fallback when child throws, and resets when try again is clicked", () => {
   it("renders children normally when there is no error", () => {
     render(
       <ErrorBoundary>
