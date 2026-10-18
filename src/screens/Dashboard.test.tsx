@@ -72,7 +72,11 @@ vi.mock("@/context/useSorokit", () => ({
 }));
 
 function stubScreen(name: string) {
-  return () => <div data-testid={`screen-${name}`}>{name} screen</div>;
+  return () => (
+    <div data-testid={`screen-${name}`}>
+      <h2>{name} screen</h2>
+    </div>
+  );
 }
 
 vi.mock("@/screens/WalletScreen", () => ({
@@ -86,7 +90,11 @@ vi.mock("@/screens/TransactionsScreen", () => ({
     if (getTransactionsShouldThrow()) {
       throw new Error("boom");
     }
-    return <div data-testid="screen-transactions">transactions screen</div>;
+    return (
+      <div data-testid="screen-transactions">
+        <h2>transactions screen</h2>
+      </div>
+    );
   },
 }));
 vi.mock("@/screens/SorobanScreen", () => ({
@@ -412,4 +420,41 @@ describe("Dashboard", () => {
       expect(html).toContain("<title>Wallet - Sorokit</title>");
     });
   });
+
+  describe("heading focus on navigation (#879)", () => {
+    it("moves focus to the newly active section heading on section change", async () => {
+      render(<Dashboard />);
+
+      fireEvent.click(screen.getByRole("button", { name: "soroban" }));
+      await screen.findByTestId("screen-soroban");
+
+      const sorobanWrapper = screen.getByTestId("screen-wrapper-soroban");
+      const heading = sorobanWrapper.querySelector("h2");
+      expect(heading).toBeInTheDocument();
+      expect(heading).toHaveFocus();
+    });
+
+    it("moves focus to the active section heading in controlled mode when activeSection updates", async () => {
+      const { rerender } = render(<Dashboard activeSection="wallet" />);
+
+      rerender(<Dashboard activeSection="transactions" />);
+      await screen.findByTestId("screen-transactions");
+
+      const transactionsWrapper = screen.getByTestId("screen-wrapper-transactions");
+      const heading = transactionsWrapper.querySelector("h2");
+      expect(heading).toBeInTheDocument();
+      expect(heading).toHaveFocus();
+    });
+
+    it("focuses heading again when re-clicking the currently active nav section", async () => {
+      render(<Dashboard defaultSection="wallet" />);
+      const walletWrapper = screen.getByTestId("screen-wrapper-wallet");
+      const heading = walletWrapper.querySelector("h2");
+      expect(heading).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "wallet" }));
+      expect(heading).toHaveFocus();
+    });
+  });
 });
+

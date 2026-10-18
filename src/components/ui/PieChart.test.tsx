@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   computeTooltipPosition,
@@ -212,6 +212,35 @@ describe("PieChart", () => {
 
       fireEvent.blur(paths[1]);
       expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    });
+
+    it("calls onSliceHover callback on pointer enter/focus and clears on leave/blur (#873)", () => {
+      const onSliceHover = vi.fn();
+      const { container } = render(
+        <PieChart slices={sampleSlices} size={160} onSliceHover={onSliceHover} />,
+      );
+      const paths = container.querySelectorAll("path");
+
+      // Pointer enter fires with the hovered slice
+      fireEvent.mouseEnter(paths[0], { clientX: 80, clientY: 40 });
+      expect(onSliceHover).toHaveBeenCalledWith(sampleSlices[0]);
+
+      // Pointer leave fires with null
+      const chartContainer = paths[0].closest(".relative");
+      if (chartContainer) {
+        fireEvent.mouseLeave(chartContainer);
+      }
+      expect(onSliceHover).toHaveBeenCalledWith(null);
+
+      onSliceHover.mockClear();
+
+      // Keyboard focus fires with the focused slice
+      fireEvent.focus(paths[1]);
+      expect(onSliceHover).toHaveBeenCalledWith(sampleSlices[1]);
+
+      // Keyboard blur fires with null
+      fireEvent.blur(paths[1]);
+      expect(onSliceHover).toHaveBeenCalledWith(null);
     });
 
     it("dynamically adjusts tooltip position when near boundary edges via computeTooltipPosition", () => {
