@@ -157,7 +157,7 @@ describe("validateEntries — validation rules", () => {
   });
 });
 
-describe("BatchPaymentProcessor UI render tests", () => {
+describe("BatchPaymentProcessor UI render tests (#743, #874)", () => {
   const VALID_CSV = `address,amount\n${VALID_ADDR},100\n${VALID_ADDR2},50\n`;
   const INVALID_CSV = "address,amount\nINVALID_ADDR,-50\n";
   let mockClient: SorokitClient;
