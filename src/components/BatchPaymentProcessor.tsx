@@ -114,6 +114,7 @@ export function validateEntries(entries: BatchEntry[]): string[] {
     if (!VALID_AMOUNT_RE.test(entry.amount) || parseFloat(entry.amount) <= 0) {
       errors.push(`Row ${i + 2}: Invalid amount "${entry.amount}"`);
     }
+    // Issue #862: enforce Stellar MEMO_TEXT limit of 28 UTF-8 bytes (not char length)
     if (entry.memo && new TextEncoder().encode(entry.memo).length > 28) {
       errors.push(`Row ${i + 2}: memo exceeds 28 bytes (Stellar MEMO_TEXT limit)`);
     }

@@ -415,9 +415,9 @@ describe("SwapSimulator", () => {
     expect(container.firstChild).toHaveClass("my-custom-class");
   });
 
-  // ---- Zero Liquidity & Minimum Liquidity Threshold (#733) ----
+  // ---- Zero Liquidity & Minimum Liquidity Threshold (#733, #864) ----
 
-  describe("zero liquidity and minimum liquidity threshold (#733)", () => {
+  describe("zero liquidity and minimum liquidity threshold (#733, #864)", () => {
     it("does not render NaN or Infinity when pool reserves are zero", () => {
       render(
         <SwapSimulator
