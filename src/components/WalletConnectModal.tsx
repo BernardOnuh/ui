@@ -266,7 +266,7 @@ export function WalletConnectModal({
           {step === "select" && (
             <div
               className="grid grid-cols-2 gap-3"
-              role="grid"
+              role="radiogroup"
               aria-label="Available wallets"
               onKeyDown={handleKeyDown}
             >
@@ -277,13 +277,15 @@ export function WalletConnectModal({
                   <button
                     key={wallet.id}
                     type="button"
+                    role="radio"
+                    aria-checked={isFocused}
+                    tabIndex={isFocused ? 0 : -1}
                     ref={(el) => {
                       walletButtonsRef.current[index] = el;
                     }}
                     onClick={() => handleSelectWallet(wallet)}
                     onKeyDown={handleKeyDown}
                     aria-label={wallet.name}
-                    aria-pressed={isFocused}
                     className="relative flex flex-col items-center gap-2 rounded-lg border border-line px-3 py-4 hover:border-line-2 hover:bg-surface-2 transition-colors focus:outline-none focus:ring-2 focus:ring-brand"
                   >
                     {installed && (
