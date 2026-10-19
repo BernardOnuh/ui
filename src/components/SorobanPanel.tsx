@@ -12,6 +12,7 @@ type State = "idle" | "loading" | "success" | "error";
 interface SorobanPanelProps {
   contractId: string;
   onContractIdChange: (contractId: string) => void;
+  onContractSave?: (contractId: string) => void;
   mode?: "invoke" | "simulate";
   maxHistory?: number;
 }
@@ -90,6 +91,7 @@ function buildCurlCommand(
 export function SorobanPanel({
   contractId,
   onContractIdChange,
+  onContractSave,
   mode = "invoke",
   maxHistory = DEFAULT_MAX_HISTORY,
 }: SorobanPanelProps) {
@@ -184,6 +186,7 @@ export function SorobanPanel({
         setContractHistory((prev) =>
           addContractToHistory(contractId.trim(), prev, maxHistory),
         );
+        onContractSave?.(contractId.trim());
         setDebugHistory((prev) => addDebugHistory(createDebuggerEntry({ contractId: contractId.trim(), method: method.trim(), args: parsedArgs, state: "success", result: data, txHash: extractTxHash(data) }), prev));
       } else {
         const { data, error: err } = await soroban.invokeContract({
@@ -205,6 +208,7 @@ export function SorobanPanel({
         setContractHistory((prev) =>
           addContractToHistory(contractId.trim(), prev, maxHistory),
         );
+        onContractSave?.(contractId.trim());
         setDebugHistory((prev) => addDebugHistory(createDebuggerEntry({ contractId: contractId.trim(), method: method.trim(), args: parsedArgs, state: "success", result: data, txHash: extractTxHash(data) }), prev));
       }
     } catch (e: unknown) {
