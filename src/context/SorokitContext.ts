@@ -12,6 +12,13 @@ export interface SorokitState {
   client: SorokitClient;
   address: string | null;
   walletName: string | null;
+  /**
+   * Ids of supported wallet extensions currently detected on `window`. Seeded
+   * on mount and refreshed when an extension injects late (`stellar#initialized`
+   * plus a short poll), so the connect UI can pick up a wallet that wasn't
+   * present when the page first rendered.
+   */
+  detectedWallets?: string[];
   isHardware?: boolean;
   isConnected: boolean;
   isConnecting: boolean;

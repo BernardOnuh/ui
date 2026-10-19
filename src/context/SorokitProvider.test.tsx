@@ -1,12 +1,29 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode, useEffect, useRef, useState } from "react";
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithProvider } from "@/__tests__/utils";
 import { getClient } from "@/lib/client";
+import { createMockClient, MOCK_ADDRESS } from "@/lib/mock-client";
 
 import { SorokitProvider } from "./SorokitProvider";
 import { useSorokit } from "./useSorokit";
+
+const WALLET_GLOBALS = [
+  "freighter",
+  "isFreighter",
+  "xbull",
+  "xBull",
+  "albedo",
+  "lobstr",
+] as const;
+
+const DetectedWalletsProbe = () => {
+  const { detectedWallets } = useSorokit();
+  return (
+    <div data-testid="detected-wallets">{(detectedWallets ?? []).join(",")}</div>
+  );
+};
 
 const TestComponent = () => {
   const { address, account, balances, connectWallet, disconnectWallet, switchNetwork, refreshAccount, clearCustomNetworks, customNetworks, isLoadingAccount, isDisconnecting, error, walletError, errorHistory } = useSorokit();
@@ -85,6 +102,14 @@ describe("SorokitProvider", () => {
         switchNetwork: vi.fn().mockResolvedValue({ data: { name: "testnet" }, error: null }),
       },
     } as unknown as ReturnType<typeof getClient>;
+  });
+
+  afterEach(() => {
+    // Wallet globals are set directly on `window`, so a test that injects one
+    // would otherwise leak into the next test's detection snapshot.
+    for (const key of WALLET_GLOBALS) {
+      delete (window as unknown as Record<string, unknown>)[key];
+    }
   });
 
   it("disconnectWallet clears address, account, balances, and error", async () => {
@@ -1258,6 +1283,173 @@ describe("SorokitProvider", () => {
       expect(screen.getByTestId("errorHistory")).toHaveTextContent(
         JSON.stringify(["Some error"]),
       );
+    });
+  });
+
+  describe("delayed wallet-extension detection (#954)", () => {
+    it("detects an extension already injected before mount", () => {
+      (window as unknown as Record<string, unknown>).lobstr = {};
+
+      renderWithProvider(<DetectedWalletsProbe />, { client: mockClient });
+
+      expect(screen.getByTestId("detected-wallets")).toHaveTextContent("lobstr");
+    });
+
+    it("detects an extension injected after mount when it fires stellar#initialized", async () => {
+      renderWithProvider(<DetectedWalletsProbe />, { client: mockClient });
+      expect(screen.getByTestId("detected-wallets")).toHaveTextContent("");
+
+      await act(async () => {
+        (window as unknown as Record<string, unknown>).freighter = {};
+        window.dispatchEvent(new Event("stellar#initialized"));
+      });
+
+      await waitFor(() =>
+        expect(screen.getByTestId("detected-wallets")).toHaveTextContent(
+          "freighter",
+        ),
+      );
+    });
+
+    it("polls briefly for an extension that injects without firing an event", async () => {
+      vi.useFakeTimers();
+      renderWithProvider(<DetectedWalletsProbe />, { client: mockClient });
+      expect(screen.getByTestId("detected-wallets")).toHaveTextContent("");
+
+      await act(async () => {
+        (window as unknown as Record<string, unknown>).albedo = {};
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(screen.getByTestId("detected-wallets")).toHaveTextContent("albedo");
+    });
+
+    it("stops polling once the detection window elapses", async () => {
+      vi.useFakeTimers();
+      const setSpy = vi.spyOn(window, "setInterval");
+      renderWithProvider(<DetectedWalletsProbe />, { client: mockClient });
+
+      expect(setSpy).toHaveBeenCalled();
+
+      await act(async () => {
+        vi.advanceTimersByTime(200 * 12);
+      });
+
+      // Injecting after the poll window is up is not detected without an event.
+      await act(async () => {
+        (window as unknown as Record<string, unknown>).xbull = {};
+        vi.advanceTimersByTime(200 * 12);
+      });
+
+      expect(screen.getByTestId("detected-wallets")).toHaveTextContent("");
+    });
+  });
+
+  describe("network switch cancellation (#954)", () => {
+    it("cancels in-flight account requests on a switch without surfacing an error", async () => {
+      let rejectBalances: ((reason?: unknown) => void) | undefined;
+      mockClient.account.getAccount = vi.fn(() => new Promise(() => {}));
+      mockClient.account.getBalances = vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectBalances = reject;
+          }),
+      );
+
+      renderWithProvider(<TestComponent />, { client: mockClient });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Connect"));
+      });
+
+      // Make sure the account query actually started before the switch lands.
+      await waitFor(() =>
+        expect(mockClient.account.getBalances).toHaveBeenCalled(),
+      );
+
+      // A switch lands while the account query is still in flight.
+      await act(async () => {
+        fireEvent.click(screen.getByText("Switch"));
+      });
+      expect(mockClient.network.switchNetwork).toHaveBeenCalled();
+
+      // Reject the superseded requests; the provider must swallow these rather
+      // than let them become unhandled promise rejections.
+      await act(async () => {
+        rejectBalances?.(new Error("aborted"));
+      });
+
+      expect(screen.getByTestId("error")).toHaveTextContent("none");
+      expect(screen.getByTestId("address")).toHaveTextContent("none");
+    });
+
+    it("surfaces a genuine rejection for the current query", async () => {
+      mockClient.account.getAccount = vi
+        .fn()
+        .mockRejectedValue(new Error("rpc unavailable"));
+
+      renderWithProvider(<TestComponent />, { client: mockClient });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Connect"));
+      });
+
+      await waitFor(() =>
+        expect(screen.getByTestId("error")).toHaveTextContent("rpc unavailable"),
+      );
+    });
+  });
+
+  describe("headless mock client injection (#954)", () => {
+    it("uses an injected mock client when no wallet extension is present", async () => {
+      const client = createMockClient();
+
+      await act(async () => {
+        renderWithProvider(<TestComponent />, { client });
+      });
+
+      expect(getClient()).toBe(client);
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Connect"));
+      });
+
+      await waitFor(() =>
+        expect(screen.getByTestId("address")).toHaveTextContent(MOCK_ADDRESS),
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("account")).toHaveTextContent("123456789"),
+      );
+      expect(screen.getByTestId("balances")).toHaveTextContent("1");
+      expect(screen.getByTestId("error")).toHaveTextContent("none");
+    });
+
+    it("re-points an injected mock client factory at the new network on switch", async () => {
+      const headlessClient = createMockClient();
+      const switchedClient = createMockClient();
+      const createClientForNetwork = vi.fn().mockReturnValue(switchedClient);
+
+      await act(async () => {
+        render(
+          <SorokitProvider
+            client={headlessClient}
+            createClientForNetwork={createClientForNetwork}
+          >
+            <TestComponent />
+          </SorokitProvider>,
+        );
+      });
+
+      expect(getClient()).toBe(headlessClient);
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Switch"));
+      });
+
+      expect(createClientForNetwork).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "testnet" }),
+      );
+      expect(getClient()).toBe(switchedClient);
     });
   });
 });
