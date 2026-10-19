@@ -100,6 +100,31 @@ describe("NFTScreen", () => {
       expect(screen.getAllByTestId("nft-card")).toHaveLength(1);
     });
   });
+  it("requests NFTs for the connected wallet address", async () => {
+    const client = createMockClient();
+    client.nft.getNfts = vi.fn().mockResolvedValue({ data: [], error: null });
+    mockSorokitState(client);
+
+    render(<NFTScreen />);
+
+    await waitFor(() => {
+      expect(client.nft.getNfts).toHaveBeenCalledWith(MOCK_ADDRESS);
+    });
+  });
+
+  it("shows the connect prompt when the wallet is disconnected", () => {
+    mockSorokitState(createMockClient(), {
+      isConnected: false,
+      address: null,
+    });
+
+    render(<NFTScreen />);
+
+    expect(
+      screen.getByText(/connect your wallet to view your nft collection/i),
+    ).toBeInTheDocument();
+  });
+
   describe("transfer flow", () => {
     const VALID_RECIPIENT = "GCEZWKCA5VLDNRLN3RPRJMRZOX3Z6G5CHCGSNFHEYVXM3XOJMDS674JZ";
     const LONG_VALUE = `https://example.com/${"a".repeat(120)}/metadata.json`;
