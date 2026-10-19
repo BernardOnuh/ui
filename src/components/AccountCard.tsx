@@ -10,16 +10,12 @@ import { useToast } from "@/context/ToastContext";
 import { useSorokit } from "@/context/useSorokit";
 import { truncateAddress } from "@/lib/utils";
 
-function getStellarExpertUrl(address: string, networkName?: string) {
+export function getStellarExpertUrl(address: string, networkName?: string) {
   if (networkName === "futurenet" || networkName === "localnet") {
     return null;
   }
   const segment = networkName === "testnet" ? "testnet" : "public";
-  const base =
-    networkName === "testnet"
-      ? "https://testnet.stellar.expert"
-      : "https://stellar.expert";
-  return `${base}/explorer/${segment}/account/${address}`;
+  return `https://stellar.expert/explorer/${segment}/account/${address}`;
 }
 
 /** Stellar base reserve: each subentry (trustline, offer, signer, data entry…) locks up 0.5 XLM. */
