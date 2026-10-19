@@ -10,6 +10,7 @@ import {
   copyToClipboard,
   fnv1aHash,
   generateAvatarGradient,
+  getStellarExpertUrl,
 } from "./AccountCard";
 
 vi.mock("@/context/useSorokit", () => ({
@@ -140,15 +141,31 @@ describe("AccountCard", () => {
   });
 });
 
-// ── Stellar Expert URL tests (#716) ──────────────────────────────────────
-describe("AccountCard — Stellar Expert URL (#716)", () => {
+// ── Stellar Expert URL tests (#716, #848) ─────────────────────────────────
+describe("AccountCard — Stellar Expert URL (#716, #848)", () => {
   const ADDRESS = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA";
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("links to mainnet with /explorer/public/ path", () => {
+  it("links to mainnet with /explorer/public/ path on https://stellar.expert base", () => {
+    vi.mocked(useSorokit).mockReturnValue({
+      address: ADDRESS,
+      account: { sequence: "1", subentryCount: 0 },
+      isLoadingAccount: false,
+      network: { name: "mainnet" },
+    } as unknown as ReturnType<typeof useSorokit>);
+
+    render(<AccountCard />);
+    const link = screen.getByText(/View on Stellar Expert/);
+    expect(link).toHaveAttribute(
+      "href",
+      `https://stellar.expert/explorer/public/account/${ADDRESS}`,
+    );
+  });
+
+  it("links to public network with /explorer/public/ path on https://stellar.expert base", () => {
     vi.mocked(useSorokit).mockReturnValue({
       address: ADDRESS,
       account: { sequence: "1", subentryCount: 0 },
@@ -164,7 +181,7 @@ describe("AccountCard — Stellar Expert URL (#716)", () => {
     );
   });
 
-  it("links to testnet with /explorer/testnet/ path", () => {
+  it("links to testnet with /explorer/testnet/ path on unified https://stellar.expert base", () => {
     vi.mocked(useSorokit).mockReturnValue({
       address: ADDRESS,
       account: { sequence: "1", subentryCount: 0 },
@@ -176,11 +193,11 @@ describe("AccountCard — Stellar Expert URL (#716)", () => {
     const link = screen.getByText(/View on Stellar Expert/);
     expect(link).toHaveAttribute(
       "href",
-      `https://testnet.stellar.expert/explorer/testnet/account/${ADDRESS}`,
+      `https://stellar.expert/explorer/testnet/account/${ADDRESS}`,
     );
   });
 
-  it("disables the link for futurenet", () => {
+  it("disables the link for futurenet with tooltip", () => {
     vi.mocked(useSorokit).mockReturnValue({
       address: ADDRESS,
       account: { sequence: "1", subentryCount: 0 },
@@ -192,9 +209,13 @@ describe("AccountCard — Stellar Expert URL (#716)", () => {
     const link = screen.getByText(/View on Stellar Expert/);
     expect(link).toHaveAttribute("aria-disabled", "true");
     expect(link).not.toHaveAttribute("href");
+    expect(link).toHaveAttribute(
+      "title",
+      "Stellar Expert is not available for this network",
+    );
   });
 
-  it("disables the link for localnet", () => {
+  it("disables the link for localnet with tooltip", () => {
     vi.mocked(useSorokit).mockReturnValue({
       address: ADDRESS,
       account: { sequence: "1", subentryCount: 0 },
@@ -206,6 +227,29 @@ describe("AccountCard — Stellar Expert URL (#716)", () => {
     const link = screen.getByText(/View on Stellar Expert/);
     expect(link).toHaveAttribute("aria-disabled", "true");
     expect(link).not.toHaveAttribute("href");
+    expect(link).toHaveAttribute(
+      "title",
+      "Stellar Expert is not available for this network",
+    );
+  });
+
+  describe("getStellarExpertUrl helper function", () => {
+    it("returns correct URL for mainnet", () => {
+      expect(getStellarExpertUrl(ADDRESS, "mainnet")).toBe(
+        `https://stellar.expert/explorer/public/account/${ADDRESS}`,
+      );
+    });
+
+    it("returns correct URL for testnet", () => {
+      expect(getStellarExpertUrl(ADDRESS, "testnet")).toBe(
+        `https://stellar.expert/explorer/testnet/account/${ADDRESS}`,
+      );
+    });
+
+    it("returns null for futurenet and localnet", () => {
+      expect(getStellarExpertUrl(ADDRESS, "futurenet")).toBeNull();
+      expect(getStellarExpertUrl(ADDRESS, "localnet")).toBeNull();
+    });
   });
 });
 
