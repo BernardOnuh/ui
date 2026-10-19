@@ -389,7 +389,7 @@ describe("Sidebar", () => {
     });
   });
 
-  describe("distinct nav section icons (#744)", () => {
+  describe("distinct nav section icons (#744, #875)", () => {
     it("assigns a unique icon to every NavSection entry in NAV", () => {
       expect(NAV.length).toBeGreaterThan(0);
       const icons = NAV.map((item) => item.icon);
