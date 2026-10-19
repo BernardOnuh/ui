@@ -148,6 +148,32 @@ describe("Sidebar", () => {
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
+  it("does not call onNavigate during initial mount when deep-linking to soroban (#850)", () => {
+    localStorage.setItem("sorokit-active-nav", "wallet");
+
+    render(
+      <Sidebar active="soroban" onNavigate={onNavigate} open={false} onClose={onClose} />,
+    );
+
+    expect(onNavigate).not.toHaveBeenCalled();
+    localStorage.removeItem("sorokit-active-nav");
+  });
+
+  it("initializes sidebar visual highlight from localStorage on initial render (#850)", () => {
+    localStorage.setItem("sorokit-active-nav", "soroban");
+
+    render(
+      <Sidebar active="wallet" onNavigate={onNavigate} open={false} onClose={onClose} />,
+    );
+
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /soroban/i })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    localStorage.removeItem("sorokit-active-nav");
+  });
+
   it("updates localStorage when navigating to a new section", () => {
     render(
       <Sidebar active="wallet" onNavigate={onNavigate} open={false} onClose={onClose} />,
