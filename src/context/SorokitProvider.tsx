@@ -294,23 +294,26 @@ export function SorokitProvider({
     }
   }, [reportError]);
 
-  // #715 — registry of polling cancel callbacks. Each polling component
+  // #715, #847 — registry of polling cancel callbacks. Each polling component
   // (FeeEstimator, ContractEventFeed, TransactionStatusTracker, GasOptimizer)
   // registers its cancel on mount and deregisters on unmount.
-  const watchersRef = useRef<Map<() => void, () => void>>(new Map());
+  const watchersRef = useRef<Set<() => void>>(new Set());
 
   const registerWatcher = useCallback((cancel: () => void): () => void => {
-    watchersRef.current.set(cancel, cancel);
+    watchersRef.current.add(cancel);
     return () => {
       watchersRef.current.delete(cancel);
     };
   }, []);
 
   const resetTransactionWatchers = useCallback(() => {
-    for (const cancel of watchersRef.current.values()) {
-      cancel();
+    for (const cancel of watchersRef.current) {
+      try {
+        cancel();
+      } catch (err) {
+        console.error("Error executing watcher cancel callback:", err);
+      }
     }
-    watchersRef.current.clear();
   }, []);
 
   const switchNetwork = useCallback(

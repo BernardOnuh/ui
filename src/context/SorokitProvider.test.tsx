@@ -1069,6 +1069,109 @@ describe("SorokitProvider", () => {
       expect(capturedClient).toBe(switchedClient);
     });
 
+    it("cancels registered polling watchers on switchNetwork and across consecutive network switches (#847)", async () => {
+      const cancel1 = vi.fn();
+      const cancel2 = vi.fn();
+
+      const WatcherComponent = () => {
+        const { registerWatcher, switchNetwork } = useSorokit();
+        useEffect(() => {
+          const deregister1 = registerWatcher?.(cancel1);
+          const deregister2 = registerWatcher?.(cancel2);
+          return () => {
+            deregister1?.();
+            deregister2?.();
+          };
+        }, [registerWatcher]);
+
+        return (
+          <div>
+            <button onClick={() => switchNetwork("testnet")}>Switch 1</button>
+            <button onClick={() => switchNetwork("public")}>Switch 2</button>
+          </div>
+        );
+      };
+
+      await act(async () => {
+        render(
+          <SorokitProvider client={mockClient}>
+            <WatcherComponent />
+          </SorokitProvider>,
+        );
+      });
+
+      expect(cancel1).not.toHaveBeenCalled();
+      expect(cancel2).not.toHaveBeenCalled();
+
+      // First network switch
+      await act(async () => {
+        fireEvent.click(screen.getByText("Switch 1"));
+      });
+
+      expect(cancel1).toHaveBeenCalledTimes(1);
+      expect(cancel2).toHaveBeenCalledTimes(1);
+
+      // Second network switch — watchers must still be called so polling doesn't survive
+      await act(async () => {
+        fireEvent.click(screen.getByText("Switch 2"));
+      });
+
+      expect(cancel1).toHaveBeenCalledTimes(2);
+      expect(cancel2).toHaveBeenCalledTimes(2);
+    });
+
+    it("deregisters watcher cancel callback on unmount (#847)", async () => {
+      const cancel = vi.fn();
+
+      const WatcherComponent = () => {
+        const { registerWatcher } = useSorokit();
+        useEffect(() => {
+          const deregister = registerWatcher?.(cancel);
+          return () => {
+            deregister?.();
+          };
+        }, [registerWatcher]);
+        return null;
+      };
+
+      const Harness = () => {
+        const [mounted, setMounted] = useState(true);
+        const { resetTransactionWatchers } = useSorokit();
+        return (
+          <div>
+            {mounted && <WatcherComponent />}
+            <button onClick={() => setMounted(false)}>Unmount</button>
+            <button onClick={() => resetTransactionWatchers?.()}>Reset</button>
+          </div>
+        );
+      };
+
+      await act(async () => {
+        render(
+          <SorokitProvider client={mockClient}>
+            <Harness />
+          </SorokitProvider>,
+        );
+      });
+
+      // Reset while mounted calls cancel
+      await act(async () => {
+        fireEvent.click(screen.getByText("Reset"));
+      });
+      expect(cancel).toHaveBeenCalledTimes(1);
+
+      // Unmount watcher
+      await act(async () => {
+        fireEvent.click(screen.getByText("Unmount"));
+      });
+
+      // Reset after unmount does NOT call cancel again
+      await act(async () => {
+        fireEvent.click(screen.getByText("Reset"));
+      });
+      expect(cancel).toHaveBeenCalledTimes(1);
+    });
+
     it("fires onNetworkChange with the new network after a successful switch", async () => {
       const onNetworkChange = vi.fn();
 
