@@ -7,6 +7,11 @@ import { TransactionHistory } from "@/components/TransactionHistory";
 import { TransactionPanel } from "@/components/TransactionPanel";
 import { SCREEN_LABELS } from "@/lib/nav-labels";
 
+// Shared by GasOptimizer and FeeEstimator so both tick in lockstep;
+// FeeEstimator's useFeeData() hook dedupes their estimateFee() calls to one
+// request per tick regardless of how many components are polling.
+const FEE_REFRESH_INTERVAL_MS = 15_000;
+
 export function TransactionsScreen() {
   const { title, sub } = SCREEN_LABELS.transactions;
 
@@ -18,8 +23,8 @@ export function TransactionsScreen() {
         </h2>
         <p className="text-[11px] text-ink-3 mt-0.5">{sub}</p>
       </div>
-      <GasOptimizer />
-      <FeeEstimator />
+      <GasOptimizer refreshInterval={FEE_REFRESH_INTERVAL_MS} />
+      <FeeEstimator refreshInterval={FEE_REFRESH_INTERVAL_MS} />
       <MultiSigTransactionBuilder />
       <ErrorBoundary isolate>
         <TransactionPanel />
