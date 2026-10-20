@@ -257,6 +257,17 @@ export function SorokitProvider({
           "info",
         );
       }
+    } catch (e) {
+      // The extension itself can throw/reject (e.g. the user rejected the
+      // popup, or injection failed) instead of resolving with `{ error }`.
+      // Without this, isConnecting still clears in `finally` below but
+      // nothing sets `error`, leaving callers like WalletConnectModal with
+      // neither an address nor an error to transition out of "connecting".
+      reportError(
+        e instanceof Error ? e.message : "Failed to connect wallet.",
+        "wallet",
+        "error",
+      );
     } finally {
       setIsConnecting(false);
     }

@@ -169,12 +169,16 @@ export function WalletConnectModal({
     setSelectedWallet(wallet);
     if (isMobile && wallet.deepLink) {
       if (typeof window !== "undefined") {
-         
+
         window.location.href = wallet.deepLink;
       }
     }
     setStep("connecting");
-    void connectWallet();
+    // Defense in depth: connectWallet() already catches a rejecting/throwing
+    // extension and turns it into context `error` state, but if it ever
+    // doesn't, falling through to "error" here (instead of leaving the
+    // spinner running forever) keeps this modal self-recovering regardless.
+    connectWallet().catch(() => setStep("error"));
   }, [isMobile, connectWallet]);
 
   function handleRetry() {
