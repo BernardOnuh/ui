@@ -8,7 +8,7 @@ import { LabelledValue } from "@/components/ui/LabelledValue";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/context/ToastContext";
 import { useSorokit } from "@/context/useSorokit";
-import { truncateAddress } from "@/lib/utils";
+import { cn, truncateAddress } from "@/lib/utils";
 
 export function getStellarExpertUrl(address: string, networkName?: string) {
   if (networkName === "futurenet" || networkName === "localnet") {
@@ -207,15 +207,24 @@ export function AccountCard() {
           )
         )}
       </div>
-      <div className="px-5 py-5">
-        {isLoadingAccount ? (
+      <div className="px-5 py-5" aria-busy={isLoadingAccount || undefined}>
+        {!account ? (
           <div className="flex flex-col gap-4">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-3/4" />
             <Skeleton className="h-4 w-1/2" />
           </div>
         ) : (
-          <div className="flex flex-col gap-5">
+          // Issue: keep the last-known account in view (instead of unmounting
+          // it behind a 3-bar skeleton) while a refresh is in flight, so the
+          // card's height stays steady — only the initial, data-less load
+          // above falls back to the skeleton.
+          <div
+            className={cn(
+              "flex flex-col gap-5 transition-opacity",
+              isLoadingAccount && "opacity-60",
+            )}
+          >
             <AddressDisplay
               address={address}
               showFull
