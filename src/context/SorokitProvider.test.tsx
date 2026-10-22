@@ -26,7 +26,7 @@ const DetectedWalletsProbe = () => {
 };
 
 const TestComponent = () => {
-  const { address, account, balances, connectWallet, disconnectWallet, switchNetwork, refreshAccount, clearCustomNetworks, customNetworks, isLoadingAccount, isDisconnecting, error, walletError, errorHistory } = useSorokit();
+  const { address, account, balances, connectWallet, disconnectWallet, switchNetwork, refreshAccount, clearCustomNetworks, customNetworks, isLoadingAccount, isDisconnecting, isHardware, error, walletError, errorHistory } = useSorokit();
 
   return (
     <div>
@@ -37,6 +37,7 @@ const TestComponent = () => {
       <div data-testid="walletError">{walletError || "none"}</div>
       <div data-testid="isLoadingAccount">{isLoadingAccount ? "true" : "false"}</div>
       <div data-testid="isDisconnecting">{isDisconnecting ? "true" : "false"}</div>
+      <div data-testid="isHardware">{isHardware ? "true" : "false"}</div>
       <div data-testid="errorHistoryCount">{errorHistory.length}</div>
       <div data-testid="customNetworks">{customNetworks?.map((net) => net.name).join(",")}</div>
       <button onClick={() => connectWallet()}>Connect</button>
@@ -110,6 +111,49 @@ describe("SorokitProvider", () => {
     for (const key of WALLET_GLOBALS) {
       delete (window as unknown as Record<string, unknown>)[key];
     }
+  // #845 — the provider is the single source of truth for hardware state. These
+  // cover the contract the button now relies on: isHardware is exposed, it is
+  // set during connectWallet, and it does not outlive the session on disconnect.
+  describe("isHardware (#845)", () => {
+    afterEach(() => {
+      delete (window as unknown as Record<string, unknown>).freighter;
+      delete (window as unknown as Record<string, unknown>).xBull;
+    });
+
+    it("defaults to false before any connection", () => {
+      renderWithProvider(<TestComponent />, { client: mockClient });
+      expect(screen.getByTestId("isHardware")).toHaveTextContent("false");
+    });
+
+    it("is set during connectWallet and stays false for a software wallet", async () => {
+      (window as unknown as Record<string, unknown>).freighter = {};
+      renderWithProvider(<TestComponent />, { client: mockClient });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Connect"));
+      });
+
+      expect(screen.getByTestId("address")).toHaveTextContent("GABC");
+      // detectWalletName() returns "Freighter" — a software wallet.
+      expect(screen.getByTestId("isHardware")).toHaveTextContent("false");
+    });
+
+    it("does not stay true after disconnect (#845)", async () => {
+      (window as unknown as Record<string, unknown>).freighter = {};
+      renderWithProvider(<TestComponent />, { client: mockClient });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Connect"));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText("Disconnect"));
+      });
+
+      // The flag is derived from the wallet name, so once there is no wallet
+      // there is no hardware state to report.
+      expect(screen.getByTestId("address")).toHaveTextContent("none");
+      expect(screen.getByTestId("isHardware")).toHaveTextContent("false");
+    });
   });
 
   it("disconnectWallet clears address, account, balances, and error", async () => {
@@ -1092,6 +1136,109 @@ describe("SorokitProvider", () => {
       });
 
       expect(capturedClient).toBe(switchedClient);
+    });
+
+    it("cancels registered polling watchers on switchNetwork and across consecutive network switches (#847)", async () => {
+      const cancel1 = vi.fn();
+      const cancel2 = vi.fn();
+
+      const WatcherComponent = () => {
+        const { registerWatcher, switchNetwork } = useSorokit();
+        useEffect(() => {
+          const deregister1 = registerWatcher?.(cancel1);
+          const deregister2 = registerWatcher?.(cancel2);
+          return () => {
+            deregister1?.();
+            deregister2?.();
+          };
+        }, [registerWatcher]);
+
+        return (
+          <div>
+            <button onClick={() => switchNetwork("testnet")}>Switch 1</button>
+            <button onClick={() => switchNetwork("public")}>Switch 2</button>
+          </div>
+        );
+      };
+
+      await act(async () => {
+        render(
+          <SorokitProvider client={mockClient}>
+            <WatcherComponent />
+          </SorokitProvider>,
+        );
+      });
+
+      expect(cancel1).not.toHaveBeenCalled();
+      expect(cancel2).not.toHaveBeenCalled();
+
+      // First network switch
+      await act(async () => {
+        fireEvent.click(screen.getByText("Switch 1"));
+      });
+
+      expect(cancel1).toHaveBeenCalledTimes(1);
+      expect(cancel2).toHaveBeenCalledTimes(1);
+
+      // Second network switch — watchers must still be called so polling doesn't survive
+      await act(async () => {
+        fireEvent.click(screen.getByText("Switch 2"));
+      });
+
+      expect(cancel1).toHaveBeenCalledTimes(2);
+      expect(cancel2).toHaveBeenCalledTimes(2);
+    });
+
+    it("deregisters watcher cancel callback on unmount (#847)", async () => {
+      const cancel = vi.fn();
+
+      const WatcherComponent = () => {
+        const { registerWatcher } = useSorokit();
+        useEffect(() => {
+          const deregister = registerWatcher?.(cancel);
+          return () => {
+            deregister?.();
+          };
+        }, [registerWatcher]);
+        return null;
+      };
+
+      const Harness = () => {
+        const [mounted, setMounted] = useState(true);
+        const { resetTransactionWatchers } = useSorokit();
+        return (
+          <div>
+            {mounted && <WatcherComponent />}
+            <button onClick={() => setMounted(false)}>Unmount</button>
+            <button onClick={() => resetTransactionWatchers?.()}>Reset</button>
+          </div>
+        );
+      };
+
+      await act(async () => {
+        render(
+          <SorokitProvider client={mockClient}>
+            <Harness />
+          </SorokitProvider>,
+        );
+      });
+
+      // Reset while mounted calls cancel
+      await act(async () => {
+        fireEvent.click(screen.getByText("Reset"));
+      });
+      expect(cancel).toHaveBeenCalledTimes(1);
+
+      // Unmount watcher
+      await act(async () => {
+        fireEvent.click(screen.getByText("Unmount"));
+      });
+
+      // Reset after unmount does NOT call cancel again
+      await act(async () => {
+        fireEvent.click(screen.getByText("Reset"));
+      });
+      expect(cancel).toHaveBeenCalledTimes(1);
     });
 
     it("fires onNetworkChange with the new network after a successful switch", async () => {

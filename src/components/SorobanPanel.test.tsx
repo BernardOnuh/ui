@@ -244,6 +244,39 @@ describe("SorobanPanel", () => {
       fireEvent.click(screen.getByRole("button", { name: /simulate/i }));
       expect(await screen.findByText("Simulation Result", { selector: "span" })).toBeInTheDocument();
     });
+
+    it("calls onContractSave callback on successful simulate", async () => {
+      mockSimulateContract.mockResolvedValueOnce({ data: { gasEstimate: 123 }, error: null });
+      const onContractSave = vi.fn();
+      render(
+        <SorobanPanel
+          contractId="CAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA"
+          onContractIdChange={() => {}}
+          onContractSave={onContractSave}
+          mode="simulate"
+        />,
+      );
+      fireEvent.change(screen.getByLabelText("Method"), { target: { value: "hello" } });
+      fireEvent.click(screen.getByRole("button", { name: /simulate/i }));
+      await screen.findByText("Simulation Result", { selector: "span" });
+      expect(onContractSave).toHaveBeenCalledWith("CAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA");
+    });
+
+    it("calls onContractSave callback on successful invoke", async () => {
+      mockInvokeContract.mockResolvedValueOnce({ data: { ok: true }, error: null });
+      const onContractSave = vi.fn();
+      render(
+        <SorobanPanel
+          contractId="CAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA"
+          onContractIdChange={() => {}}
+          onContractSave={onContractSave}
+        />,
+      );
+      fireEvent.change(screen.getByLabelText("Method"), { target: { value: "hello" } });
+      fireEvent.click(screen.getByRole("button", { name: /invoke/i }));
+      await screen.findByText("Result", { selector: "span" });
+      expect(onContractSave).toHaveBeenCalledWith("CAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA");
+    });
   });
 
   it("updates the textarea height style dynamically on input", () => {

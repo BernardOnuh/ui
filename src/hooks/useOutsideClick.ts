@@ -23,8 +23,6 @@ export function useOutsideClick<T extends HTMLElement = HTMLElement>(
   }, [handler]);
 
   useEffect(() => {
-    if (!enabled) return;
-
     const listener = (event: MouseEvent | TouchEvent | PointerEvent) => {
       const el = target ?? ref.current;
       if (!el || el.contains(event.target as Node)) {
@@ -37,10 +35,15 @@ export function useOutsideClick<T extends HTMLElement = HTMLElement>(
     // non-interactive elements, and ancestors that stop propagation would
     // otherwise swallow the event before it reaches `document`.
     const options: AddEventListenerOptions = { capture: true, passive: true };
-    document.addEventListener("pointerdown", listener, options);
-    document.addEventListener("touchstart", listener, options);
-    document.addEventListener("mousedown", listener, options);
 
+    if (enabled) {
+      document.addEventListener("pointerdown", listener, options);
+      document.addEventListener("touchstart", listener, options);
+      document.addEventListener("mousedown", listener, options);
+    }
+
+    // Always return a cleanup so that toggling `enabled` back to false (or
+    // unmounting) cannot leave a dangling document-level listener behind.
     return () => {
       document.removeEventListener("pointerdown", listener, options);
       document.removeEventListener("touchstart", listener, options);

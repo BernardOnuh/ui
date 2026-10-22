@@ -65,6 +65,7 @@ export function SorokitProvider({
 
   const [address, setAddress] = useState<string | null>(null);
   const [walletName, setWalletName] = useState<string | null>(null);
+  const [isHardware, setIsHardware] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [account, setAccount] = useState<AccountData | null>(null);
   const [balances, setBalances] = useState<Balance[]>([]);
@@ -335,6 +336,26 @@ export function SorokitProvider({
     return null;
   }
 
+  // #845 — hardware detection lives here, once, instead of being re-derived from
+  // `walletName` inside each consumer. The provider already knows the wallet
+  // name at connect time, so it is the only place that can answer this.
+  //
+  // Matched against the name rather than an injected flag because the client
+  // adapter's `connect()` resolves to just an address (`SorokitClient.wallet.
+  // connect` in src/lib/client.ts) and surfaces no wallet metadata, and
+  // `detectWalletName()` only ever returns the four known extension names.
+  // Substring matching is therefore the only signal actually available here; the
+  // win is that it is now defined once and every consumer agrees on the answer.
+  function detectIsHardware(walletName: string | null): boolean {
+    if (!walletName) return false;
+    const name = walletName.toLowerCase();
+    return (
+      name.includes("ledger") ||
+      name.includes("hardware") ||
+      name.includes("webusb")
+    );
+  }
+
   const connectWallet = useCallback(async () => {
     setIsConnecting(true);
     setWalletError(null);
@@ -343,6 +364,8 @@ export function SorokitProvider({
     try {
       const name = detectWalletName();
       setWalletName(name);
+      // #845 — set alongside walletName so the two can't disagree.
+      setIsHardware(detectIsHardware(name));
       const { data, error } = await clientRef.current.wallet.connect();
       if (error) {
         reportError(error, "wallet", "error");
@@ -361,6 +384,17 @@ export function SorokitProvider({
           "info",
         );
       }
+    } catch (e) {
+      // The extension itself can throw/reject (e.g. the user rejected the
+      // popup, or injection failed) instead of resolving with `{ error }`.
+      // Without this, isConnecting still clears in `finally` below but
+      // nothing sets `error`, leaving callers like WalletConnectModal with
+      // neither an address nor an error to transition out of "connecting".
+      reportError(
+        e instanceof Error ? e.message : "Failed to connect wallet.",
+        "wallet",
+        "error",
+      );
     } finally {
       setIsConnecting(false);
     }
@@ -382,6 +416,9 @@ export function SorokitProvider({
 
       setAddress(null);
       setWalletName(null);
+      // #845 — a disconnected session has no wallet, so the hardware flag goes
+      // with it rather than outliving the name it was derived from.
+      setIsHardware(false);
       setAccount(null);
       setBalances([]);
       setAccountError(null);
@@ -398,23 +435,26 @@ export function SorokitProvider({
     }
   }, [reportError]);
 
-  // #715 — registry of polling cancel callbacks. Each polling component
+  // #715, #847 — registry of polling cancel callbacks. Each polling component
   // (FeeEstimator, ContractEventFeed, TransactionStatusTracker, GasOptimizer)
   // registers its cancel on mount and deregisters on unmount.
-  const watchersRef = useRef<Map<() => void, () => void>>(new Map());
+  const watchersRef = useRef<Set<() => void>>(new Set());
 
   const registerWatcher = useCallback((cancel: () => void): () => void => {
-    watchersRef.current.set(cancel, cancel);
+    watchersRef.current.add(cancel);
     return () => {
       watchersRef.current.delete(cancel);
     };
   }, []);
 
   const resetTransactionWatchers = useCallback(() => {
-    for (const cancel of watchersRef.current.values()) {
-      cancel();
+    for (const cancel of watchersRef.current) {
+      try {
+        cancel();
+      } catch (err) {
+        console.error("Error executing watcher cancel callback:", err);
+      }
     }
-    watchersRef.current.clear();
   }, []);
 
   const switchNetwork = useCallback(
@@ -569,6 +609,7 @@ export function SorokitProvider({
       address,
       walletName,
       detectedWallets,
+      isHardware,
       isConnected: !!address,
       isConnecting,
       isLoading: isConnecting || isLoadingAccount,
@@ -601,6 +642,7 @@ export function SorokitProvider({
       address,
       walletName,
       detectedWallets,
+      isHardware,
       isConnecting,
       isDisconnecting,
       isLoadingAccount,
