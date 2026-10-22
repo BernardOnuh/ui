@@ -105,7 +105,8 @@ function mockSorokit(client: SorokitClient, opts?: { isConnected?: boolean }) {
   } as unknown as ReturnType<typeof useSorokit>);
 }
 
-describe("GovernanceDashboard", () => {
+// Issue #866: Implement GovernanceDashboard — proposal list, vote casting, and delegation UI
+describe("GovernanceDashboard (#866)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

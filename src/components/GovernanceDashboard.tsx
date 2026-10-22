@@ -1,5 +1,5 @@
 /**
- * GovernanceDashboard — a full on-chain governance surface for Soroban dApps.
+ * GovernanceDashboard — a full on-chain governance surface for Soroban dApps (#866).
  *
  * Three panels:
  *  1. ProposalList   — proposals fetched from the governance contract, each
