@@ -170,6 +170,53 @@ describe("PieChart", () => {
     });
   });
 
+  describe("keyboard accessibility of slices (#953)", () => {
+    it("makes every slice focusable and exposes it as a graphics-symbol", () => {
+      const { container } = render(<PieChart slices={sampleSlices} />);
+      const paths = container.querySelectorAll("path");
+
+      expect(paths).toHaveLength(3);
+      paths.forEach((path) => {
+        expect(path).toHaveAttribute("tabindex", "0");
+        expect(path).toHaveAttribute("role", "graphics-symbol");
+      });
+    });
+
+    it("labels each slice with its name and percentage for screen readers", () => {
+      const { container } = render(<PieChart slices={sampleSlices} />);
+      const paths = container.querySelectorAll("path");
+
+      expect(paths[0]).toHaveAttribute(
+        "aria-label",
+        "Stellar Lumens: 60.0%",
+      );
+      expect(paths[1]).toHaveAttribute("aria-label", "USD Coin: 30.0%");
+      expect(paths[2]).toHaveAttribute("aria-label", "Aqua: 10.0%");
+    });
+
+    it("applies a visible keyboard focus ring to each slice", () => {
+      const { container } = render(<PieChart slices={sampleSlices} />);
+      const path = container.querySelector("path")!;
+      const className = path.getAttribute("class") ?? "";
+
+      expect(className).toContain("focus-visible:outline-none");
+      expect(className).toContain("focus-visible:ring-2");
+      expect(className).toContain("focus-visible:ring-brand");
+    });
+
+    it("blurs the tooltip when a focused slice loses focus", () => {
+      const { container } = render(<PieChart slices={sampleSlices} />);
+      const paths = container.querySelectorAll("path");
+
+      fireEvent.focus(paths[0]);
+      expect(screen.getByRole("tooltip")).toHaveTextContent(
+        "Stellar Lumens: 60.0%",
+      );
+      fireEvent.blur(paths[0]);
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    });
+  });
+
   describe("slice tooltips and dynamic repositioning", () => {
     it("renders title tag inside each path for native fallback", () => {
       const { container } = render(<PieChart slices={sampleSlices} />);

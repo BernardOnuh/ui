@@ -89,6 +89,61 @@ describe("useOutsideClick", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  describe("explicit target rebinding (#955)", () => {
+    it("uses the explicitly passed target as the outside boundary", () => {
+      const handler = vi.fn();
+      const target = document.createElement("div");
+      const outside = document.createElement("div");
+      document.body.appendChild(target);
+      document.body.appendChild(outside);
+
+      renderHook(() => useOutsideClick<HTMLDivElement>(handler, true, target));
+
+      fireEvent.mouseDown(target);
+      expect(handler).not.toHaveBeenCalled();
+
+      fireEvent.mouseDown(outside);
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("rebinds to a new target when the target element changes", () => {
+      const handler = vi.fn();
+      const first = document.createElement("div");
+      const second = document.createElement("div");
+      document.body.appendChild(first);
+      document.body.appendChild(second);
+
+      const { rerender } = renderHook(
+        ({ target }) => useOutsideClick<HTMLDivElement>(handler, true, target),
+        { initialProps: { target: first as HTMLDivElement | null } },
+      );
+
+      // Clicks inside the first target are ignored.
+      fireEvent.mouseDown(first);
+      expect(handler).not.toHaveBeenCalled();
+
+      // Swap the boundary to the second element.
+      rerender({ target: second });
+
+      // The old boundary is now "outside".
+      fireEvent.mouseDown(first);
+      expect(handler).toHaveBeenCalledTimes(1);
+
+      // The new boundary is respected.
+      fireEvent.mouseDown(second);
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not fire while the explicit target is null", () => {
+      const handler = vi.fn();
+      const outside = document.createElement("div");
+      document.body.appendChild(outside);
+
+      renderHook(() => useOutsideClick<HTMLDivElement>(handler, true, null));
+
+      fireEvent.mouseDown(outside);
+      expect(handler).not.toHaveBeenCalled();
+    });
   it("removes the exact document listeners that were added when disabled", () => {
     vi.restoreAllMocks();
     const addSpy = vi.spyOn(document, "addEventListener");

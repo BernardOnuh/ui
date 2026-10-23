@@ -3,10 +3,17 @@ import { useEffect, useRef } from "react";
 /**
  * Hook that calls a handler when a click or touch event occurs outside of the referenced element.
  * Listens to `pointerdown`, `touchstart`, and `mousedown` to ensure full compatibility with touch devices (iOS Safari).
+ *
+ * The target can either be the returned ref (assigned via `ref={ref}` or
+ * `ref.current = node`) or passed explicitly as the third argument. Pass the
+ * element explicitly when it is conditionally mounted: the listeners are
+ * rebound whenever `target` changes, so a surface that mounts a different
+ * popover/panel later still gets the correct "outside" boundary.
  */
 export function useOutsideClick<T extends HTMLElement = HTMLElement>(
   handler: (event: Event) => void,
   enabled: boolean = true,
+  target?: T | null,
 ) {
   const ref = useRef<T>(null);
   const handlerRef = useRef(handler);
@@ -17,7 +24,7 @@ export function useOutsideClick<T extends HTMLElement = HTMLElement>(
 
   useEffect(() => {
     const listener = (event: MouseEvent | TouchEvent | PointerEvent) => {
-      const el = ref.current;
+      const el = target ?? ref.current;
       if (!el || el.contains(event.target as Node)) {
         return;
       }
@@ -42,7 +49,7 @@ export function useOutsideClick<T extends HTMLElement = HTMLElement>(
       document.removeEventListener("touchstart", listener, options);
       document.removeEventListener("mousedown", listener, options);
     };
-  }, [enabled]);
+  }, [enabled, target]);
 
   return ref;
 }
