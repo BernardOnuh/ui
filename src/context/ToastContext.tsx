@@ -52,6 +52,14 @@ interface ToastContextValue {
   dismissAll: () => void;
   /** @deprecated Alias of `dismissAll`, kept for backwards compatibility. */
   clearAll: () => void;
+  /**
+   * Pause a toast's auto-dismiss countdown (e.g. while the pointer hovers it
+   * or it holds keyboard focus). Pauses are reference-counted so overlapping
+   * hover/focus sources don't resume the timer early.
+   */
+  pauseToast: (id: string) => void;
+  /** Resume a paused toast's countdown from where it left off. */
+  resumeToast: (id: string) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -67,22 +75,62 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 let toastCounter = 0;
 const DEFAULT_DURATION = 5000;
 
+/**
+ * Per-toast countdown state. `remaining` is only meaningful while a toast is
+ * paused: it holds the milliseconds left when the countdown was frozen.
+ * `pauseCount` is reference-counted because a toast can be paused by more
+ * than one source at once (pointer hover *and* keyboard focus), and it must
+ * only resume once every source has released it.
+ */
+interface ToastTimer {
+  timeout: ReturnType<typeof setTimeout> | null;
+  remaining: number;
+  startedAt: number;
+  pauseCount: number;
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [unreadIds, setUnreadIds] = useState<string[]>([]);
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
-    new Map(),
-  );
+  const timersRef = useRef<Map<string, ToastTimer>>(new Map());
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
     setUnreadIds((prev) => prev.filter((unreadId) => unreadId !== id));
     const timer = timersRef.current.get(id);
     if (timer) {
-      clearTimeout(timer);
+      if (timer.timeout !== null) clearTimeout(timer.timeout);
       timersRef.current.delete(id);
     }
   }, []);
+
+  const pauseToast = useCallback((id: string) => {
+    const entry = timersRef.current.get(id);
+    if (!entry) return;
+    entry.pauseCount += 1;
+    if (entry.pauseCount > 1 || entry.timeout === null) return;
+    // Freeze the countdown: remember what's left, then cancel the timer.
+    clearTimeout(entry.timeout);
+    entry.timeout = null;
+    const elapsed = Date.now() - entry.startedAt;
+    entry.remaining = Math.max(0, entry.remaining - elapsed);
+  }, []);
+
+  const resumeToast = useCallback(
+    (id: string) => {
+      const entry = timersRef.current.get(id);
+      if (!entry || entry.pauseCount === 0) return;
+      entry.pauseCount -= 1;
+      if (entry.pauseCount > 0) return;
+      if (entry.remaining <= 0) {
+        removeToast(id);
+        return;
+      }
+      entry.startedAt = Date.now();
+      entry.timeout = setTimeout(() => removeToast(id), entry.remaining);
+    },
+    [removeToast],
+  );
 
   const addToast = useCallback(
     (input: Omit<Toast, "id">): string => {
@@ -95,8 +143,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
       if (toast.duration !== 0) {
         const ms = toast.duration ?? DEFAULT_DURATION;
-        const timer = setTimeout(() => removeToast(id), ms);
-        timersRef.current.set(id, timer);
+        const timeout = setTimeout(() => removeToast(id), ms);
+        timersRef.current.set(id, {
+          timeout,
+          remaining: ms,
+          startedAt: Date.now(),
+          pauseCount: 0,
+        });
       }
 
       return id;
@@ -105,7 +158,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 
   const dismissAll = useCallback(() => {
-    timersRef.current.forEach((timer) => clearTimeout(timer));
+    timersRef.current.forEach((timer) => {
+      if (timer.timeout !== null) clearTimeout(timer.timeout);
+    });
     timersRef.current.clear();
     setToasts([]);
     setUnreadIds([]);
@@ -141,7 +196,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const timers = timersRef.current;
     return () => {
-      timers.forEach((timer) => clearTimeout(timer));
+      timers.forEach((timer) => {
+        if (timer.timeout !== null) clearTimeout(timer.timeout);
+      });
       timers.clear();
     };
   }, []);
@@ -160,6 +217,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         info,
         dismissAll,
         clearAll: dismissAll,
+        pauseToast,
+        resumeToast,
       }}
     >
       {children}

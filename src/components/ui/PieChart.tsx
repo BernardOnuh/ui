@@ -341,7 +341,10 @@ export function PieChart({
                 tabIndex={0}
                 role="graphics-symbol"
                 aria-label={`${slice.label}: ${pct.toFixed(1)}%`}
-                className="transition-opacity duration-150 hover:opacity-80 focus:opacity-80 focus:outline-none cursor-pointer"
+                // A keyboard user tabs onto each slice; the focus ring (plus a
+                // brand-coloured stroke, since box-shadow rings don't render
+                // reliably on SVG) makes the focused slice obvious.
+                className="transition-opacity duration-150 hover:opacity-80 focus:opacity-80 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-base focus-visible:stroke-brand focus-visible:stroke-2"
                 onMouseEnter={(e) => handlePointerMove(e, slice, pct)}
                 onMouseMove={(e) => handlePointerMove(e, slice, pct)}
                 onFocus={() => handleFocus(slice, pct, midAngle)}

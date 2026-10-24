@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSorokit } from "@/context/useSorokit";
 import type { InvokeParams, SorokitClient } from "@/lib/client";
 
-import { GovernanceDashboard, type GovernanceProposal } from "./GovernanceDashboard";
+import { GovernanceDashboard, type GovernanceProposal, isVotingClosed } from "./GovernanceDashboard";
 
 vi.mock("@/context/useSorokit", () => ({
   useSorokit: vi.fn(),
@@ -105,7 +105,8 @@ function mockSorokit(client: SorokitClient, opts?: { isConnected?: boolean }) {
   } as unknown as ReturnType<typeof useSorokit>);
 }
 
-describe("GovernanceDashboard", () => {
+// Issue #866: Implement GovernanceDashboard — proposal list, vote casting, and delegation UI
+describe("GovernanceDashboard (#866)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -483,6 +484,48 @@ describe("GovernanceDashboard", () => {
       await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
       expect(screen.getByTestId("current-delegate")).toHaveAttribute("title", VALID_ADDRESS);
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+  });
+
+  // ─── Disconnect reset ─────────────────────────────────────────────────────
+  describe("disconnect reset", () => {
+    it("clears stale proposals and the delegate when the wallet disconnects", async () => {
+      const { client } = makeClient({
+        proposals: PROPOSALS,
+        delegate: VALID_ADDRESS,
+      });
+      mockSorokit(client);
+
+      const { rerender } = render(<GovernanceDashboard />);
+
+      expect(await screen.findByText(PROPOSALS[0].title)).toBeInTheDocument();
+      expect(screen.getByTestId("current-delegate")).toHaveAttribute(
+        "title",
+        VALID_ADDRESS,
+      );
+
+      mockSorokit(client, { isConnected: false });
+      rerender(<GovernanceDashboard />);
+
+      expect(screen.queryByText(PROPOSALS[0].title)).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/connect your wallet to view proposals/i),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("current-delegate")).toHaveTextContent(
+        /none/i,
+      );
+    });
+  });
+
+  // ─── isVotingClosed helper ────────────────────────────────────────────────
+  describe("isVotingClosed", () => {
+    it("returns true only for terminal statuses", () => {
+      expect(isVotingClosed("active")).toBe(false);
+      expect(isVotingClosed("pending")).toBe(false);
+      expect(isVotingClosed("closed")).toBe(true);
+      expect(isVotingClosed("executed")).toBe(true);
+      expect(isVotingClosed("passed")).toBe(true);
+      expect(isVotingClosed("rejected")).toBe(true);
     });
   });
 });
