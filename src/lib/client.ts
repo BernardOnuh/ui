@@ -413,6 +413,10 @@ export type NftMetadata = {
   name: string;
   description?: string;
   image?: string;
+  /** Audio/video asset URL (e.g. `animation_url` in token metadata) */
+  animationUrl?: string;
+  /** MIME type of the primary media asset, e.g. `video/mp4`, `audio/mpeg` */
+  mimeType?: string;
   externalUrl?: string;
   attributes: NftAttribute[];
 };

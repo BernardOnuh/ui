@@ -112,6 +112,7 @@ describe("Public exports surface", () => {
     expect(exports.PortfolioRebalancer).toBeDefined();
     expect(exports.DelegationRow).toBeDefined();
     expect(exports.RewardHistory).toBeDefined();
+    expect(exports.generateRewardHistoryCsv).toBeTypeOf("function");
     expect(exports.RewardsPanel).toBeDefined();
     expect(exports.SwapExecutionTracker).toBeDefined();
     expect(exports.PieChart).toBeDefined();
@@ -145,8 +146,11 @@ describe("Public exports surface", () => {
     // Staking Utilities
     expect(exports.aggregateDailyRewards).toBeTypeOf("function");
     expect(exports.createDefaultFilter).toBeTypeOf("function");
+    expect(exports.DEFAULT_XLM_PRICE_USD).toBeTypeOf("number");
     expect(exports.DELEGATION_BASE_FEE_STROOPS).toBeTypeOf("number");
     expect(exports.estimateDelegationFeeXlm).toBeTypeOf("function");
+    expect(exports.estimateHistoricalXlmPriceUsd).toBeTypeOf("function");
+    expect(exports.estimateRewardUsdValue).toBeTypeOf("function");
     expect(exports.filterValidators).toBeTypeOf("function");
     expect(exports.formatStakingPct).toBeTypeOf("function");
     expect(exports.formatXlm).toBeTypeOf("function");

@@ -45,6 +45,10 @@ export const MEMO_TYPES: { value: MemoType; label: string }[] = [
 /** MEMO_HASH and MEMO_RETURN are both a raw 32-byte value, hex-encoded. */
 const MEMO_HASH_HEX_LENGTH = 64;
 const MEMO_HASH_HEX_PATTERN = /^[0-9a-fA-F]{64}$/;
+  { value: "hash", label: "Memo Hash" },
+  { value: "return", label: "Memo Return" },
+];
+
 
 export interface TransactionPanelProps {
   defaultDestination?: string;
@@ -90,6 +94,7 @@ export function TransactionPanel({
   const [isBuildingPreview, setIsBuildingPreview] = useState(false);
   const [estimatedFeeXlm, setEstimatedFeeXlm] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isSubmittingRef = useRef(false);
   const formId = useId();
 
   // Fetch the current network fee estimate once a wallet is connected so the
@@ -138,6 +143,9 @@ export function TransactionPanel({
   const isMemoHashType = memoType === "hash" || memoType === "return";
   const isMemoHashValid =
     !isMemoHashType || (memo.trim() !== "" && MEMO_HASH_HEX_PATTERN.test(memo.trim()));
+  const isMemoHexType = memoType === "hash" || memoType === "return";
+  const isMemoHashValid =
+    !isMemoHexType || /^[0-9a-fA-F]{64}$/.test(memo.trim());
 
   // Get XLM balance from balances array
   const xlmBalance = balances.find((b) => b.asset === "XLM")?.balance || "0";
@@ -166,15 +174,20 @@ export function TransactionPanel({
     hasSufficientBalance &&
     isMemoIdValid &&
     isMemoHashValid;
+    isMemoIdValid &&
+    isMemoHashValid &&
+    hasSufficientBalance;
+
 
   /** The actual submission — only ever called from the confirm modal. */
   async function submitTransaction() {
-    if (state === "loading") return;
+    if (state === "loading" || isSubmittingRef.current) return;
     if (!address || !client) {
       setError("Wallet not connected");
       setState("error");
       return;
     }
+    isSubmittingRef.current = true;
 
     // Cancel previous requests
     abortControllerRef.current?.abort();
@@ -221,13 +234,15 @@ export function TransactionPanel({
       }
     } finally {
       setPreview(null);
+      isSubmittingRef.current = false;
     }
   }
 
   /** Builds a preview of the transaction and opens the confirmation modal. */
   async function buildPreview() {
     const sourceAddress = address;
-    if (!sourceAddress) return;
+    if (!sourceAddress || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsBuildingPreview(true);
     try {
       const { data: feeData } = client ? await client.transaction.estimateFee() : { data: null };
@@ -250,13 +265,15 @@ export function TransactionPanel({
       });
     } finally {
       setIsBuildingPreview(false);
+      isSubmittingRef.current = false;
     }
   }
 
   /** Form submit handler — fires on Send button click and Enter key press. */
   function handleFormSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
-    if (state === "loading" || !address || !canSubmit) return;
+    if (state === "loading" || !address || !canSubmit || isSubmittingRef.current)
+      return;
     if (previewMode) {
       void buildPreview();
     } else {
@@ -484,12 +501,16 @@ export function TransactionPanel({
                         ? "Memo hash"
                         : memoType === "return"
                           ? "Memo return"
+                        ? "Memo Hash"
+                        : memoType === "return"
+                          ? "Memo Return"
                           : "Memo (optional)"
                   }
                   placeholder={
                     memoType === "id"
                       ? "1234567890"
                       : isMemoHashType
+                      : isMemoHexType
                         ? "64-character hex string"
                         : "Text memo"
                   }
@@ -511,6 +532,8 @@ export function TransactionPanel({
                       ? "Memo ID must be an unsigned integer"
                       : isMemoHashType && memo.trim() !== "" && !isMemoHashValid
                         ? `Memo must be a ${MEMO_HASH_HEX_LENGTH}-character hex string`
+                      : isMemoHexType && memo.trim() !== "" && !isMemoHashValid
+                        ? "Memo hash must be a 64-character hexadecimal string"
                         : undefined
                   }
                   disabled={state === "loading"}
@@ -524,6 +547,7 @@ export function TransactionPanel({
                 )}
               </div>
             )}
+
           </form>
         )}
       </div>
