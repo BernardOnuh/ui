@@ -4,10 +4,11 @@ import {
   calculateMonthlySpending,
   type CategoryRule,
   computeBudgetBreakdown,
+  convertXlmToUsd,
+  formatUtcDate,
   monthKeyUtc,
   normalizeMemoForMatching,
 } from "./budget";
-import { computeBudgetBreakdown, convertXlmToUsd, formatUtcDate } from "./budget";
 import type { Transaction } from "./client";
 
 const txs: Transaction[] = [
@@ -288,6 +289,9 @@ describe("calculateMonthlySpending", () => {
       categories,
     );
     expect(result.categories[0].limit).toBeUndefined();
+  });
+});
+
 describe("formatUtcDate", () => {
   it("formats the UTC calendar date, not the local one", () => {
     // Local-time formatting would print Dec 31, 2025 in timezones west of UTC.

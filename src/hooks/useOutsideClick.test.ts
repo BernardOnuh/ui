@@ -144,6 +144,8 @@ describe("useOutsideClick", () => {
       fireEvent.mouseDown(outside);
       expect(handler).not.toHaveBeenCalled();
     });
+  });
+
   it("removes the exact document listeners that were added when disabled", () => {
     vi.restoreAllMocks();
     const addSpy = vi.spyOn(document, "addEventListener");

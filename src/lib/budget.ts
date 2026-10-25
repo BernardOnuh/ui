@@ -218,6 +218,8 @@ export function calculateMonthlySpending(
     total: monthlyCategories.reduce((sum, c) => sum + c.amount, 0),
     categories: monthlyCategories,
   };
+}
+
 /**
  * Format an ISO timestamp as a calendar date in UTC ("Jan 1, 2026"). Always
  * UTC so the output never shifts a day for users west of Greenwich.

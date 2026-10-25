@@ -294,6 +294,9 @@ describe("Payment Flow Integration", () => {
 
       expect(screen.getByLabelText("Destination Address")).toBeInTheDocument();
       expect(screen.queryByText("Transaction failed")).not.toBeInTheDocument();
+    });
+  });
+
   it("submits payment to a 69-character Muxed account (M...) with a valid 64-character MEMO_HASH (#968)", async () => {
     const ConnectTrigger = () => {
       const { connectWallet } = useSorokit();
@@ -329,10 +332,10 @@ describe("Payment Flow Integration", () => {
     });
 
     // Invalid hex memo blocks submission and shows validation message
-    const memoInput = screen.getByLabelText("Memo Hash");
+    const memoInput = screen.getByLabelText("Memo hash");
     fireEvent.change(memoInput, { target: { value: "not-a-valid-64-char-hex" } });
     expect(
-      screen.getByText(/Memo hash must be a 64-character hexadecimal string/i),
+      screen.getByText(/must be a 64-character hex string/i),
     ).toBeInTheDocument();
     expect(screen.getByTestId("submit-transaction")).toBeDisabled();
 
@@ -403,4 +406,3 @@ describe("Payment Flow Integration", () => {
     });
   });
 });
-

@@ -1,8 +1,9 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SwapExecutionTracker } from "./SwapExecutionTracker";
 import { useSorokit } from "@/context/useSorokit";
+
+import { SwapExecutionTracker } from "./SwapExecutionTracker";
 
 // Mock useSorokit hook
 vi.mock("@/context/useSorokit", () => ({

@@ -804,7 +804,7 @@ describe("SwapSimulator", () => {
       fireEvent.change(input, { target: { value: "500" } });
 
       // SVG should still show calculation based on debounced 100
-      let svgContainer = screen.getByText("Max Size: 500 XLM").closest("div");
+      const svgContainer = screen.getByText("Max Size: 500 XLM").closest("div");
       expect(svgContainer).toBeInTheDocument();
 
       // After debounce, SVG recalculates

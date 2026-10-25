@@ -288,9 +288,7 @@ export function SwapExecutionTracker({
               <div>
                 <p className="text-[13px] font-semibold text-brand">Transaction Pending</p>
                 <p className="text-[12px] text-ink-3 mt-0.5">
-                  {internalStatus === "signing"
-                    ? "Waiting for wallet signature..."
-                    : "Transaction submitted to network. Waiting for consensus confirmation..."}
+                  Transaction submitted to network. Waiting for consensus confirmation...
                 </p>
               </div>
               {onCancel && (
