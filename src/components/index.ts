@@ -41,7 +41,13 @@ export { InfoCell } from "./ui/InfoCell";
 export { Input } from "./ui/Input";
 export { LabelledValue } from "./ui/LabelledValue";
 export { Separator } from "./ui/Separator";
-export { AssetRowSkeleton, Skeleton, SkeletonCard, SkeletonRow } from "./ui/Skeleton";
+export {
+  AssetRowSkeleton,
+  Skeleton,
+  SkeletonCard,
+  SkeletonRow,
+  SkeletonTable,
+} from "./ui/Skeleton";
 
 // Error handling
 export { ErrorBoundary } from "./ErrorBoundary";
@@ -151,7 +157,22 @@ export { RewardsPanel } from "./RewardsPanel";
 export type { StakingDashboardProps } from "./StakingDashboard";
 export { StakingDashboard } from "./StakingDashboard";
 export { SwapExecutionTracker } from "./SwapExecutionTracker";
-export { SwapRoute } from "./SwapRoute";
+export type {
+  NormalizedHop,
+  RouteHop,
+  RouteValidationResult,
+  SwapRouteProps,
+} from "./SwapRoute";
+export {
+  detectCircularRoutes,
+  formatFeeTier,
+  formatPoolDepth,
+  getIntermediateHops,
+  getSwapPath,
+  isCircularRoute,
+  SwapRoute,
+  validateSwapRoute,
+} from "./SwapRoute";
 export type { PieChartProps, PieSlice } from "./ui/PieChart";
 export { PieChart } from "./ui/PieChart";
 export type { ValidatorCardProps } from "./ValidatorCard";

@@ -304,8 +304,8 @@ export function NetworkBanner({
   const updateHeight = useCallback(() => {
     if (!bannerRef.current || typeof document === "undefined") return;
     const measured =
-      bannerRef.current.offsetHeight ||
       bannerRef.current.getBoundingClientRect().height ||
+      bannerRef.current.offsetHeight ||
       0;
     const height = measured > 0 ? measured : 32;
     document.documentElement.style.setProperty(
@@ -314,7 +314,7 @@ export function NetworkBanner({
     );
   }, []);
 
-  // Fallback for environments without ResizeObserver
+  // Fallback for environments without ResizeObserver (#876)
   useLayoutEffect(() => {
     if (typeof document === "undefined") return;
 
@@ -324,9 +324,17 @@ export function NetworkBanner({
     }
 
     if (typeof ResizeObserver === "undefined") {
-      updateHeight();
+      const measured =
+        bannerRef.current?.getBoundingClientRect().height ||
+        bannerRef.current?.offsetHeight ||
+        0;
+      const height = measured > 0 ? measured : 32;
+      document.documentElement.style.setProperty(
+        "--banner-height",
+        `${height}px`,
+      );
     }
-  }, [isVisible, updateHeight]);
+  }, [isVisible]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
